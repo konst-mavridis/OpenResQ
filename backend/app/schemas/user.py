@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 """
 User schemas for request/response validation.
 """
@@ -53,3 +54,15 @@ class UserRole(BaseModel):
             "role": "responder"
         }
 
+=======
+from pydantic import BaseModel, EmailStr
+
+class RegisterUser(BaseModel):
+    email: EmailStr
+    password: str
+    display_name: str | None = None
+
+class LoginUser(BaseModel):
+    email: EmailStr
+    password: str
+>>>>>>> 327748fd30086a4fd58a614cd888531a2bd9417a

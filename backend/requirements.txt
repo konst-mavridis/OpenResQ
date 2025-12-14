@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 pydantic==2.5.0
@@ -11,3 +12,16 @@ httpx==0.25.1
 structlog==23.2.0
 aiofiles==23.2.1
 google-cloud-firestore==2.14.0
+=======
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+pydantic
+python-multipart
+python-jose[cryptography]  # JWT
+passlib[bcrypt]             # password hashing
+python-dotenv               # για config
+aiofiles
+websockets
+>>>>>>> 327748fd30086a4fd58a614cd888531a2bd9417a
