@@ -1,13 +1,7 @@
 from pydantic import BaseModel
 
-class HazardZoneBase(BaseModel):
-    name: str
-    latitude: float
-    longitude: float
+class HazardCreate(BaseModel):
     type: str
-
-class HazardZoneOut(HazardZoneBase):
-    id: int
-
-    class Config:
-        orm_mode = True
+    description: str
+    location: dict
+    severity: str  # low, medium, high
