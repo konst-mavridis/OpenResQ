@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 """
 User routes - handles user profile and area management.
 """
@@ -73,15 +72,3 @@ async def update_user_area(
         logger.error(f"Failed to update user area: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
-=======
-from fastapi import APIRouter, Depends
-from app.firebase_config import db
-from app.utils.verify import verify_token
-
-router = APIRouter()
-
-@router.get("/me")
-async def get_user(user = Depends(verify_token)):
-    doc = db.collection("users").document(user["uid"]).get()
-    return doc.to_dict()
->>>>>>> 327748fd30086a4fd58a614cd888531a2bd9417a

@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 """
 Alert schemas for request/response validation.
 """
@@ -41,21 +40,3 @@ class UpdateAlertStatus(BaseModel):
             "status": "resolved"
         }
 
-=======
-from pydantic import BaseModel
-from datetime import datetime
-
-class AlertBase(BaseModel):
-    type: str
-    description: str | None = None
-    latitude: float
-    longitude: float
-    severity: str = "medium"
-
-class AlertOut(AlertBase):
-    id: int
-    timestamp: datetime
-
-    class Config:
-        orm_mode = True
->>>>>>> 327748fd30086a4fd58a614cd888531a2bd9417a

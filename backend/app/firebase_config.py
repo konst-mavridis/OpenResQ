@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 """
 Firebase initialization and configuration.
 All credentials are loaded from environment variables.
@@ -75,18 +74,3 @@ def get_fcm():
     if not _initialized:
         initialize_firebase()
     return fcm
-=======
-import firebase_admin
-from firebase_admin import credentials, firestore, auth, storage, messaging
-
-cred = credentials.Certificate("C:\\Users\\user\\Desktop\\OpenResQ\\backend\\openresq-b4c5f-firebase-adminsdk-fbsvc-b1b7042cba.json")
-
-firebase_admin.initialize_app(cred, {
-    'storageBucket': 'gs://openresq-b4c5f.firebasestorage.app'
-})
-
-db = firestore.client()
-bucket = storage.bucket()   
-firebase_auth = auth
-fcm = messaging
->>>>>>> 327748fd30086a4fd58a614cd888531a2bd9417a
