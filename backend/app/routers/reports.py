@@ -5,11 +5,15 @@ All business logic is delegated to ReportService.
 from fastapi import APIRouter, Depends, HTTPException
 import logging
 from typing import List, Optional
+import datetime
+import firebase_admin.firestore as admin_fs
+from app.firebase_config import db, fcm
 from app.services.report_service import ReportService
 from app.utils.verify import verify_token, require_role
 from app.schemas.report import CreateReport, UpdateReport
 from app.utils.logger import log_action
 from app.utils.ws_manager import ws_manager
+from app.utils.geo import is_within_radius
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/reports", tags=["Reports"])
@@ -184,7 +188,7 @@ def get_report(report_id: str, user=Depends(verify_token)):
 
 # responder update - includes FCM + websocket broadcast
 @router.patch("/{report_id}/respond", response_model=dict)
-def responder_update(report_id: str, data: UpdateReport, user=Depends(require_roles("responder","admin"))):
+def responder_update(report_id: str, data: UpdateReport, user=Depends(require_role("responder","admin"))):
     doc_ref = db.collection("reports").document(report_id)
     doc = doc_ref.get()
     if not doc.exists:
