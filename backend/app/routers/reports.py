@@ -154,7 +154,7 @@ def add_responder_note(
 
 # assigned reports for responder
 @router.get("/assigned", response_model=List[dict])
-def assigned_reports(user=Depends(require_roles("responder","admin"))):
+def assigned_reports(user=Depends(require_role("responder","admin"))):
     user_doc = db.collection("users").document(user["uid"]).get()
     if not user_doc.exists:
         raise HTTPException(404, "User not found")
