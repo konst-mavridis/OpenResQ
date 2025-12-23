@@ -21,20 +21,10 @@ report_service = ReportService()
 
 
 @router.post("/", response_model=dict)
-def create_report(
+async def create_report(
     data: CreateReport,
     user=Depends(verify_token)
 ):
-    """
-    Create a new incident/report.
-    
-    Args:
-        data: Report creation data
-        user: Authenticated user context
-    
-    Returns:
-        Created report with ID
-    """
     try:
         report = report_service.create_report(
             user_id=user["uid"],
@@ -48,17 +38,11 @@ def create_report(
         )
         
         # Broadcast to WebSocket clients
-        try:
-            import asyncio
-            asyncio.create_task(
-                ws_manager.broadcast({
+        await ws_manager.broadcast({
                     "type": "new_report",
                     "report_id": report["id"],
                     "report": report
-                })
-            )
-        except Exception as e:
-            logger.warning(f"WebSocket broadcast failed: {e}")
+        })
         
         return report
     except Exception as e:
