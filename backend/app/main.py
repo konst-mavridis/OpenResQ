@@ -29,22 +29,7 @@ settings = get_settings()
 limiter = Limiter(key_func=get_remote_address)
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Application startup and shutdown events."""
-    # Startup
-    logger.info("Starting OpenResQ backend")
-    try:
-        initialize_firebase()
-        logger.info("Firebase initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize Firebase: {e}")
-        raise
-    
-    yield
-    
-    # Shutdown
-    logger.info("Shutting down OpenResQ backend")
+
 
 
 # Create FastAPI app
@@ -52,8 +37,21 @@ app = FastAPI(
     title="OpenResQ API",
     description="Emergency incident reporting and responder coordination system",
     version="1.0.0",
-    lifespan=lifespan
 )
+
+@app.on_event("startup")
+async def startup_event():
+    logger.info("Starting OpenResQ backend")
+    try:
+        initialize_firebase()
+        logger.info("Firebase initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize Firebase: {e}")
+        raise
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    logger.info("Shutting down OpenResQ backend")
 
 # Add rate limiter to app
 app.state.limiter = limiter
