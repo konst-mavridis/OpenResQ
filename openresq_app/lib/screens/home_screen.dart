@@ -4,9 +4,13 @@ import '../services/auth_service.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../models/report.dart';
-import 'report_detail.dart';
+import '../screens/report_detail.dart';
+import '../widgets/marker_popup.dart';
 import 'login_screen.dart';
 import '../widgets/report_form.dart';
+import 'logs_screen.dart';
+import 'package:geolocator/geolocator.dart';
+import 'dart:async';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -14,18 +18,30 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  int _selectedIndex = 0;
   final ApiService api = ApiService();
   final AuthService auth = AuthService();
   List<Report> reports = [];
-  String role = "citizen";
-  final MapController _mapController = MapController();
+  List<Report> filteredReports = [];
+  String role = 'citizen';
+  String? severityFilter;
+  bool _isSatellite = false;
+  LatLng? _userLocation;
+  double _accuracy = 0;
+  StreamSubscription<Position>? _positionStream;
+  bool _followUser = true; // για auto-follow
+  Report? _selectedReport;
 
+
+  final MapController _mapController = MapController();
   @override
   void initState() {
     super.initState();
     loadUserAndReports();
+    _goToUserLocation();
+    _startLiveLocation();
   }
-
+  
   Future<void> loadUserAndReports() async {
     // get role from backend
     try {
@@ -34,98 +50,198 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {}
     await loadReports();
   }
-
   Future<void> loadReports() async {
     try {
       List<dynamic> fetched;
       if (role == 'responder') {
-        fetched = await api.getAssignedReports();
+        fetched = await api.getAllReports();
       } else {
-        fetched = await api.getNearbyReports();
+        fetched = await api.getAllReports();
       }
       setState(() {
         reports = fetched.map((e) => Report.fromJson(e as Map<String,dynamic>)).toList();
+        _applyFilter();
       });
     } catch (e) {
       print("Error loading reports: $e");
     }
   }
 
+  Future<void> _logout() async {
+    await auth.logout();
+
+    if (!mounted) return;
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
+  }
+
+  void _applyFilter() {
+    if (severityFilter == null || severityFilter == 'All') {
+      filteredReports = reports;
+    } else {
+      filteredReports = reports.where((r) => r.severity.toLowerCase() == severityFilter!.toLowerCase()).toList();
+    }
+  }
+
+  Future<void> _goToUserLocation() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return;
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) return;
+    }
+
+    if (permission == LocationPermission.deniedForever) return;
+
+    final position = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
+    );
+
+    final latLng = LatLng(position.latitude, position.longitude);
+
+    setState(() {
+      _userLocation = latLng;
+    });
+
+    _mapController.move(latLng, 14.5);
+  }
+
+  Future<void> _startLiveLocation() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return;
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) return;
+    }
+
+    if (permission == LocationPermission.deniedForever) return;
+
+    _positionStream = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.best,
+        distanceFilter: 5, // 🔥 update κάθε 5 μέτρα
+      ),
+    ).listen((Position position) {
+      final latLng = LatLng(position.latitude, position.longitude);
+
+      setState(() {
+        _userLocation = latLng;
+        _accuracy = position.accuracy;
+      });
+
+      if (_followUser) {
+        _mapController.move(latLng, _mapController.camera.zoom);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _positionStream?.cancel();
+    super.dispose();
+  }
+
+
+
+
   Color _severityColor(String severity) {
     switch (severity.toLowerCase()) {
-      case 'high': return Colors.red;
-      case 'medium': return Colors.orange;
-      default: return Colors.green;
+      case 'low':
+        return Colors.green;
+      case 'medium':
+        return Colors.orange;
+      case 'high':
+        return Colors.red;
+      default:
+        return Colors.grey;
     }
+  }
+
+
+  List<Widget> get _pages => [
+        _buildReportsPage(),
+        const LogsPage(), // το page που φτιάξαμε
+      ];
+
+  void _onSelectPage(int index) {
+    setState(() => _selectedIndex = index);
+    Navigator.pop(context); // κλείνει το drawer
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('OpenResQ'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Logout',
-            onPressed: () async {
-              await auth.logout();
-              if (context.mounted) {
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (context) => const LoginScreen()),
-                  (route) => false,
-                );
-              }
-            },
-          ),
-        ],
-      ),
-      body:
-        Column(
-        children: [
-          SizedBox(
-            height: 300,
-            child: FlutterMap(
-              mapController: _mapController,
-              options: MapOptions(
-                initialCenter: reports.isNotEmpty ? LatLng(reports.first.latitude, reports.first.longitude) : LatLng(37.9838,23.7275),
-                initialZoom: 12.0,
+    appBar: AppBar(
+      title: const Text('OpenResQ'),
+      actions: [
+        IconButton(
+          icon: Icon(_isSatellite ? Icons.map : Icons.satellite),
+          tooltip: _isSatellite ? 'Normal map' : 'Satellite map',
+          onPressed: () {
+            setState(() {
+              _isSatellite = !_isSatellite;
+            });
+          },
+        ),
+
+        IconButton(
+          icon: const Icon(Icons.logout),
+          tooltip: 'Logout',
+          onPressed: () async {
+            final confirm = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Logout'),
+                content: const Text('Θέλεις σίγουρα να αποσυνδεθείς;'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('Ακύρωση'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('Logout'),
+                  ),
+                ],
               ),
-              children: [
-                TileLayer(urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', subdomains: ['a','b','c']),
-                MarkerLayer(markers: reports.map((r) {
-            return Marker(
-                    point: LatLng(r.latitude, r.longitude),
-                    width: 50, height: 50,
-                    child: GestureDetector(
-                      onTap: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => ReportDetail(reportId: r.id, role: role))).then((_) => loadReports());
-                      },
-                      child: Icon(Icons.location_on, color: _severityColor(r.severity), size: 36),
-                    ),
-                  );
-                }).toList())
-              ],
+            );
+
+            if (confirm == true) {
+              await _logout();
+            }
+          },
+        ),
+      ],
+    ),
+      drawer: Drawer(
+        child: ListView(
+          children: [
+            DrawerHeader(
+              decoration: const BoxDecoration(color: Colors.blue),
+              child: Text('Menu', style: TextStyle(color: Colors.white, fontSize: 24)),
             ),
-          ),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: loadReports,
-              child: ListView.builder(
-                itemCount: reports.length,
-                itemBuilder: (context, i) {
-                  final r = reports[i];
-                  return ListTile(
-                    title: Text(r.title),
-                    subtitle: Text('${r.eventType} • ${r.severity} • ${r.status}'),
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ReportDetail(reportId: r.id, role: role))).then((_)=>loadReports()),
-                  );
-                },
+            ListTile(
+              leading: const Icon(Icons.report),
+              title: const Text("Reports"),
+              onTap: () => _onSelectPage(0),
+            ),
+            if (role == 'admin')
+              ListTile(
+                leading: const Icon(Icons.list_alt),
+                title: const Text("Logs"),
+                onTap: () => _onSelectPage(1),
               ),
-            ),
-          )
-        ],
+          ],
+        ),
       ),
+      body: _pages[_selectedIndex],
       floatingActionButton: role == 'citizen' ? FloatingActionButton(
         onPressed: () async {
           final result = await showModalBottomSheet<bool>(
@@ -139,6 +255,177 @@ class _HomeScreenState extends State<HomeScreen> {
         },
         child: const Icon(Icons.add),
       ) : null,
+    );
+  }
+
+  Widget _buildReportsPage() {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: DropdownButton<String>(
+            value: severityFilter ?? 'All',
+            items: const [
+              DropdownMenuItem(value: 'All', child: Text('All severities')),
+              DropdownMenuItem(value: 'low', child: Text('Low')),
+              DropdownMenuItem(value: 'medium', child: Text('Medium')),
+              DropdownMenuItem(value: 'high', child: Text('High')),
+            ],
+            onChanged: (value) {
+              setState(() {
+                severityFilter = value;
+                _applyFilter();
+              });
+            },
+          ),
+        ),
+        SizedBox(
+          height: 300,
+          child: Stack(
+           children: [ 
+            FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(
+                initialCenter: filteredReports.isNotEmpty
+                    ? LatLng(filteredReports.first.latitude, filteredReports.first.longitude)
+                    : LatLng(37.9838, 23.7275),
+                initialZoom: 12.0,
+              ),
+              children: [
+                TileLayer(
+                  urlTemplate: _isSatellite
+                      ? "https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}?access_token=pk.eyJ1Ijoia29ubWF2ciIsImEiOiJjbWpvOHQ5bjcwOHpwM2ZxeDZ4amtyaTI2In0.4ht_QxTceiooKIRsy6kzxA"
+                      : "https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token=pk.eyJ1Ijoia29ubWF2ciIsImEiOiJjbWpvOHQ5bjcwOHpwM2ZxeDZ4amtyaTI2In0.4ht_QxTceiooKIRsy6kzxA",
+                  userAgentPackageName: 'com.openresq.app',
+                ),
+
+          
+  
+                MarkerLayer(
+                  markers: [
+                    ...filteredReports.map((r) => Marker(
+                      point: LatLng(r.latitude, r.longitude),
+                      width: 40,
+                      height: 40,
+                      child: GestureDetector(
+                        onTap: () {
+                          _mapController.move(
+                            LatLng(r.latitude, r.longitude),
+                            15,
+                          );
+
+                          setState(() {
+                            _selectedReport = r;
+                            _followUser = false;
+                          });
+                        },
+                        child: const Icon(
+                          Icons.location_on,
+                          color: Colors.red,
+                          size: 40,
+                        ),
+                      ),
+                      ),
+                    ),
+                    if (_userLocation != null)
+                      Marker(
+                        point: _userLocation!,
+                        width: 18,
+                        height: 18,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.blue,
+                            border: Border.all(color: Colors.white, width: 3),
+                          ),
+                        ),
+                      ),
+
+                  ],
+                ),
+                CircleLayer(
+                  circles: [
+                    if (_userLocation != null)
+                      CircleMarker(
+                        point: _userLocation!,
+                        radius: _accuracy, // σε meters
+                        useRadiusInMeter: true,
+                        color: Colors.blue.withOpacity(0.15),
+                        borderStrokeWidth: 1,
+                        borderColor: Colors.blue.withOpacity(0.4),
+                      ),
+                  ],
+                ),
+                if (_selectedReport != null)
+                  Positioned(
+                    child: MarkerPopup(
+                      report: _selectedReport!,
+                      mapController: _mapController,
+                      onClose: () {
+                        setState(() => _selectedReport = null);
+                      },
+                      onDetails: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ReportDetail(
+                              reportId: _selectedReport!.id,
+                              role: role,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+
+              ],
+            ),
+                  Positioned(
+                    bottom: 16,
+                    right: 16,
+                    child: FloatingActionButton(
+                      mini: true,
+                      backgroundColor: Colors.white,
+                      onPressed: () async {
+                        _followUser = true;
+                        await _goToUserLocation();
+                      },
+                      child: const Icon(
+                        Icons.my_location,
+                        color: Colors.blue,
+                      ),
+                    ),
+                  ),
+
+           ]
+          )        
+        ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: loadReports,
+            child: ListView.builder(
+              itemCount: filteredReports.length,
+              itemBuilder: (context, i) {
+                final r = filteredReports[i];
+                return ListTile(
+                  title: Text(r.title),
+                  subtitle: Text('${r.eventType} • ${r.severity} • ${r.status}'),
+                  onTap: () {
+                    final latLng = LatLng(r.latitude, r.longitude);
+
+                      _mapController.move(latLng, 15);
+
+                    setState(() {
+                      _selectedReport = r;
+                        _followUser = false;
+                      });
+                    },
+                );
+              },
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

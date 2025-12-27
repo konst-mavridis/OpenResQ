@@ -144,7 +144,7 @@ class _ReportFormState extends State<ReportForm> {
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: eventType,
+                    initialValue: eventType,
                     items: const [
                       DropdownMenuItem(value: 'other', child: Text('Other')),
                       DropdownMenuItem(value: 'fire', child: Text('Fire')),

@@ -1,119 +1,196 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
-import 'local_queue.dart'; // we'll implement sqflite queue
 
 class ApiService {
-  final String baseUrl = "http://10.0.2.2:8000";
-  final LocalQueue _queue = LocalQueue();
+    final String baseUrl = "http://10.0.2.2:8000";
 
-  Future<String> _getToken() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) throw Exception("Not logged in");
-    final token = await user.getIdToken();
-    if (token == null) throw Exception("Failed to get id token");
-    return token;
-  }
+    Future<String> _getToken() async {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw Exception('User not authenticated');
+      }
 
-  Map<String,String> _authHeaders(String token) => {
-    "Content-Type": "application/json",
-    "Authorization": "Bearer $token",
-  };
+      final token = await user.getIdToken();
+      if (token == null) {
+        throw Exception('Token is null');
+      }
 
-  Future<Map<String,dynamic>> createReport(Map<String,dynamic> body) async {
-    final token = await _getToken();
-    try {
-      final resp = await http.post(Uri.parse("$baseUrl/reports/"),
-        headers: _authHeaders(token),
-        body: jsonEncode(body),
-      ).timeout(const Duration(seconds: 8));
-      if (resp.statusCode >=200 && resp.statusCode<300) return jsonDecode(resp.body);
-      throw Exception(resp.body);
-    } catch (e) {
-      // enqueue for later if offline or error
-      await _queue.enqueue({"path": "/reports/", "method":"POST", "body": body});
-      rethrow; // optionally rethrow so UI knows it failed now
+      return token;
     }
-  }
+
+    Future<Map<String, String>> _authHeaders() async {
+      final token = await _getToken();
+      return {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      };
+    }
 
   Future<List<dynamic>> getNearbyReports() async {
-    final token = await _getToken();
-    final resp = await http.get(Uri.parse("$baseUrl/reports/nearby"),
-      headers: _authHeaders(token),
-    );
-    if (resp.statusCode==200) return jsonDecode(resp.body) as List<dynamic>;
-    throw Exception(resp.body);
-  }
+      final headers = await _authHeaders();
+      final res = await http.get(Uri.parse('$baseUrl/reports/nearby'), headers: headers);
+      if (res.statusCode == 200) return jsonDecode(res.body);
+      throw Exception(res.body);
+    }
 
-  Future<List<dynamic>> getAssignedReports() async {
-    final token = await _getToken();
-    final resp = await http.get(Uri.parse("$baseUrl/reports/assigned"),
-      headers: _authHeaders(token),
-    );
-    if (resp.statusCode==200) return jsonDecode(resp.body) as List<dynamic>;
-    throw Exception(resp.body);
-  }
+    Future<List<dynamic>> getAllReports() async {
+      final headers = await _authHeaders();
+      final res = await http.get(Uri.parse('$baseUrl/reports/all'), headers: headers);
+      if (res.statusCode == 200) return jsonDecode(res.body);
+      throw Exception(res.body);
+    }
 
-  Future<Map<String,dynamic>> getReport(String id) async {
-    final token = await _getToken();
-    final resp = await http.get(Uri.parse("$baseUrl/reports/$id"),
-      headers: _authHeaders(token),
-    );
-    if (resp.statusCode==200) return jsonDecode(resp.body);
-    throw Exception(resp.body);
-  }
 
-  Future<void> responderUpdate(String id, Map<String,dynamic> patch) async {
-    final token = await _getToken();
-    final resp = await http.patch(Uri.parse("$baseUrl/reports/$id/respond"),
-      headers: _authHeaders(token),
-      body: jsonEncode(patch),
-    );
-    if (resp.statusCode<200||resp.statusCode>=300) throw Exception(resp.body);
-  }
+    Future<List<dynamic>> getAssignedReports() async {
+      final headers = await _authHeaders();
+      final res = await http.get(Uri.parse('$baseUrl/reports/assigned'), headers: headers);
+      if (res.statusCode == 200) return jsonDecode(res.body);
+      throw Exception(res.body);
+    }
 
-  Future<void> deleteReport(String id) async => adminDelete(id);
+    Future<Map<String,dynamic>> getReport(String id) async {
+      final headers = await _authHeaders();
+      final res = await http.get(Uri.parse('$baseUrl/reports/$id'), headers: headers);
 
-  Future<void> adminDelete(String id) async {
-    final token = await _getToken();
-    final resp = await http.delete(Uri.parse("$baseUrl/admin/report/$id"),
-      headers: _authHeaders(token),
-    );
-    if (resp.statusCode<200||resp.statusCode>=300) throw Exception(resp.body);
-  }
+      if (res.statusCode == 200) return jsonDecode(res.body);
 
-  Future<Map<String,dynamic>> getMe() async {
-    final token = await _getToken();
-    final resp = await http.get(Uri.parse("$baseUrl/me"), headers: _authHeaders(token));
-    if (resp.statusCode == 200) return jsonDecode(resp.body);
-    // fallback: return basic firebase user info
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) return {"uid": user.uid, "email": user.email};
-    throw Exception(resp.body);
-  }
+      if (res.statusCode == 404) {
+        throw Exception("NOT_FOUND");
+      }
 
-  // process queued requests (call when connectivity returns or app starts)
-  Future<void> processQueue() async {
-    final items = await _queue.getAll();
-    for (final item in items) {
-      try {
-        final token = await _getToken();
-        final path = item['path'] as String;
-        final method = item['method'] as String;
-        final body = item['body'] as Map<String,dynamic>?;
-        http.Response resp;
-        if (method == "POST") {
-          resp = await http.post(Uri.parse(baseUrl + path), headers: _authHeaders(token), body: jsonEncode(body ?? {}));
-        } else {
-          // add other methods as needed
-          continue;
+      throw Exception(res.body);
+    }
+
+
+    Future<Map<String,dynamic>> createReport(Map<String,dynamic> body) async {
+      final headers = await _authHeaders();
+      final res = await http.post(Uri.parse('$baseUrl/reports/'), headers: headers, body: jsonEncode(body));
+      if (res.statusCode >= 200 && res.statusCode < 300) return jsonDecode(res.body);
+      throw Exception(res.body);
+    }
+
+    Future<void> responderUpdate(String id, Map<String,dynamic> patch) async {
+      final headers = await _authHeaders();
+      final res = await http.patch(Uri.parse('$baseUrl/reports/$id/respond'), headers: headers, body: jsonEncode(patch));
+      if (res.statusCode < 200 || res.statusCode >= 300) throw Exception(res.body);
+    }
+
+    Future<void> deleteReport(
+        String reportId, {
+        required String reason,
+        bool hard = false,
+        bool confirm = false,
+    }) async {
+        final uri = Uri.parse(
+          '$baseUrl/admin/report/$reportId'
+          '?reason=${Uri.encodeComponent(reason)}'
+          '&hard=$hard'
+          '&confirm=$confirm',
+        );
+
+        final res = await http.delete(
+          uri,
+          headers: await _authHeaders(),
+        );
+
+        if (res.statusCode != 200) {
+          throw Exception(res.body);
         }
-        if (resp.statusCode >=200 && resp.statusCode < 300) {
-          await _queue.remove(item['id'] as int);
-        }
-      } catch (_) {
-        // stop processing if still offline / token fail
+      }
+
+    Future<void> editOwnReport(String id, Map<String,dynamic> patch) async {
+      final res = await http.patch(
+        Uri.parse('$baseUrl/reports/$id/edit'),
+        headers: await _authHeaders(),
+        body: jsonEncode(patch),
+      );
+
+      if (res.statusCode != 200) {
+        throw Exception(res.body);
       }
     }
+
+
+  Future<List<dynamic>> getLogs({int limit = 50}) async {
+    final headers = await _authHeaders();
+
+    final uri = Uri.parse('$baseUrl/admin/logs?limit=$limit');
+
+    final res = await http.get(
+      uri,
+      headers: headers,
+    );
+
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body);
+    }
+
+    throw Exception(res.body);
   }
-}
+
+
+  Future<void> deleteOwnReport(String id, String reason) async {
+    final res = await http.delete(
+      Uri.parse('$baseUrl/reports/$id/delete?reason=${Uri.encodeComponent(reason)}'),
+      headers: await _authHeaders(),
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception(res.body);
+    }
+  }
+
+
+    // ---------------- CHAT ----------------
+    Future<List<dynamic>> getChatMessages(String id) async {
+      final res = await http.get(
+        Uri.parse('$baseUrl/reports/$id/chat'),
+        headers: await _authHeaders(),
+      );
+
+      if (res.statusCode != 200) {
+        throw Exception('Failed to load chat');
+      }
+
+      return jsonDecode(res.body);
+    }
+
+    Future<void> sendChatMessage(String id, String text) async {
+      final res = await http.post(
+        Uri.parse('$baseUrl/reports/$id/chat'),
+        headers: await _authHeaders(),
+        body: jsonEncode({
+          "text": text,
+        }),
+      );
+
+      if (res.statusCode != 200) {
+        throw Exception('Failed to send message');
+      }
+    }
+
+
+
+
+    // ---------------- USER ----------------
+
+    Future<Map<String, dynamic>> getMe() async {
+      final headers = await _authHeaders();
+      final res = await http.get(
+        Uri.parse('$baseUrl/auth/me'),
+        headers: headers,
+      );
+
+      if (res.statusCode == 200) {
+        return jsonDecode(res.body);
+      }
+
+      // fallback (ποτέ null UI)
+      final user = FirebaseAuth.instance.currentUser;
+      return {
+        'uid': user?.uid,
+        'email': user?.email,
+      };
+    }
+  }
