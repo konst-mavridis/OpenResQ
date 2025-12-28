@@ -69,3 +69,6 @@ class ReportNote(BaseModel):
 
 class ChatMessageCreate(BaseModel):
     text: str
+
+class PushTokenCreate(BaseModel):
+    token: str

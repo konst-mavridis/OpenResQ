@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 
 class ApiService {
-    final String baseUrl = "http://10.0.2.2:8000";
+    final String baseUrl = "https://openresq.onrender.com";
 
     Future<String> _getToken() async {
       final user = FirebaseAuth.instance.currentUser;
@@ -168,6 +168,14 @@ class ApiService {
       if (res.statusCode != 200) {
         throw Exception('Failed to send message');
       }
+    }
+
+    Future<void> sendPushToken(String token) async {
+      await http.post(
+        Uri.parse("$baseUrl/report/push-token"), // backend endpoint για FCM token
+        headers: {"Content-Type": "application/json"},
+        body: json.encode({"push_token": token}),
+      );
     }
 
 

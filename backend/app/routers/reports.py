@@ -10,10 +10,11 @@ import firebase_admin.firestore as admin_fs
 from app.firebase_config import db, fcm
 from app.services.report_service import ReportService
 from app.utils.verify import verify_token, require_role
-from app.schemas.report import CreateReport, UpdateReport, ChatMessageCreate
+from app.schemas.report import CreateReport, PushTokenCreate, UpdateReport, ChatMessageCreate
 from app.utils.logger import log_action
 from app.utils.ws_manager import ws_manager
 from app.utils.geo import is_within_radius
+from firebase_admin import firestore
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/reports", tags=["Reports"])
@@ -298,23 +299,44 @@ def delete_own_report(
     return {"message": "Report permanently deleted"}
 
 
+# Chat
 @router.post("/{report_id}/chat")
-def send_message(
-    report_id: str,
-    data: ChatMessageCreate,
-    user=Depends(verify_token)
-):
+def send_message(report_id: str, data: ChatMessageCreate, user=Depends(verify_token)):
     chat_ref = db.collection("chats").document(report_id)
     msg_ref = chat_ref.collection("messages").document()
-
     msg_ref.set({
         "text": data.text,
         "sender_id": user["uid"],
         "sender_role": user["role"],
-        "created_at": datetime.datetime.utcnow(),
+        "created_at": datetime.datetime.utcnow()
     })
 
+    # WebSocket broadcast
+    import asyncio
+    asyncio.create_task(ws_manager.broadcast({
+        "type": "chat_message",
+        "report_id": report_id,
+        "message": {
+            "id": msg_ref.id,
+            "text": data.text,
+            "sender_id": user["uid"],
+            "sender_role": user["role"]
+        }
+    }))
+
+    # FCM push
+    try:
+        message = fcm.Message(
+            notification=fcm.Notification(title="New message", body=data.text),
+            topic="chat_" + report_id,
+            data={"report_id": report_id}
+        )
+        fcm.send(message)
+    except Exception:
+        pass
+
     return {"message": "sent"}
+
 
 @router.get("/{report_id}/chat")
 def get_messages(report_id: str, user=Depends(verify_token)):
@@ -325,8 +347,13 @@ def get_messages(report_id: str, user=Depends(verify_token)):
         .order_by("created_at")
         .stream()
     )
+    return [{**m.to_dict(), "id": m.id} for m in messages]
 
-    return [
-        {**m.to_dict(), "id": m.id}
-        for m in messages
-    ]
+@router.post("/push-token")
+def send_push_token(data: PushTokenCreate, user=Depends(verify_token)):
+    db.collection("users").document(user["uid"]).set(
+        {
+            "push_tokens": firestore.ArrayUnion([data.token]),
+            "updated_at": datetime.datetime.utcnow()
+    }, merge=True)
+    return {"message": "Push token saved"}
