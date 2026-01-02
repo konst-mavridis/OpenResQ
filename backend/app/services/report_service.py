@@ -8,6 +8,7 @@ import logging
 from app.firebase_config import get_db, get_fcm
 from app.utils.geo import is_within_radius
 from app.utils.logger import log_action
+import math
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,19 @@ class ReportService:
     def __init__(self):
         self.db = get_db()
         self.fcm = get_fcm()
+
+    def haversine_distance(self, lat1, lon1, lat2, lon2):
+        R = 6371  # Earth radius in km
+        phi1 = math.radians(lat1)
+        phi2 = math.radians(lat2)
+        dphi = math.radians(lat2 - lat1)
+        dlambda = math.radians(lon2 - lon1)
+
+        a = (
+            math.sin(dphi / 2) ** 2
+            + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+        )
+        return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     
     def create_report(
         self,
@@ -126,54 +140,56 @@ class ReportService:
         latitude: Optional[float] = None,
         longitude: Optional[float] = None,
         radius_km: Optional[float] = None
-    ) -> List[Dict[str, Any]]:
-        """
-        Get reports nearby a location.
+    ):
+        print("🔥 get_nearby_reports START")
         
-        Args:
-            user_id: User ID
-            latitude: Center latitude (optional, defaults to user's area)
-            longitude: Center longitude (optional, defaults to user's area)
-            radius_km: Search radius in km (optional)
-        
-        Returns:
-            List of nearby reports
-        """
         try:
-            # If not provided, get from user profile
+            # 1️⃣ user location
             if latitude is None or longitude is None:
                 user_doc = self.db.collection("users").document(user_id).get()
                 if user_doc.exists:
-                    user_data = user_doc.to_dict()
-                    area = user_data.get("area", {})
-                    latitude = area.get("latitude", 37.9838)
-                    longitude = area.get("longitude", 23.7275)
-                    radius_km = radius_km or area.get("radius_km", 20.0)
+                    area = user_doc.to_dict().get("area", {})
+                    latitude = float(area.get("latitude", 37.9838))
+                    longitude = float(area.get("longitude", 23.7275))
+                    radius_km = float(area.get("radius_km", 25))
                 else:
-                    # Default to Athens
-                    latitude = 37.9838
-                    longitude = 23.7275
-                    radius_km = radius_km or 20.0
+                    latitude, longitude, radius_km = 37.9838, 23.7275, 25
             else:
-                radius_km = radius_km or 20.0
-            
-            # Get all reports and filter by distance
+                radius_km = radius_km or 25
+
+
+            # 2️⃣ load reports
+            docs = list(self.db.collection("reports").stream())
+
             reports = []
-            for doc in self.db.collection("reports").stream():
-                report_data = doc.to_dict()
-                report_lat = report_data.get("latitude")
-                report_lng = report_data.get("longitude")
-                
-                if report_lat and report_lng:
-                    if is_within_radius(latitude, longitude, report_lat, report_lng, radius_km):
-                        report_data["id"] = doc.id
-                        reports.append(report_data)
-            
+
+            for doc in docs:
+                data = doc.to_dict()
+                lat = data.get("latitude")
+                lng = data.get("longitude")
+
+                try:
+                    lat = float(lat)
+                    lng = float(lng)
+                except:
+                    continue
+
+                distance = is_within_radius(
+                    latitude, longitude,
+                    lat, lng,
+                    radius_km
+                )
+
+
+                if distance:
+                    data["id"] = doc.id
+                    reports.append(data)
+
             return reports
+
         except Exception as e:
-            logger.error(f"Failed to get nearby reports: {e}")
-            return []
-    
+            raise
+
     def update_report_status(
         self,
         report_id: str,

@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 
 class ApiService {
-    final String baseUrl = "https://openresq.onrender.com";
+    final String baseUrl = "http://10.0.2.2:8000";
 
     Future<String> _getToken() async {
       final user = FirebaseAuth.instance.currentUser;
@@ -178,6 +178,14 @@ class ApiService {
       );
     }
 
+    Future<void> markChatSeen(String reportId) async {
+      await http.post(
+        Uri.parse("$baseUrl/reports/$reportId/chat/seen"),
+        headers: await _authHeaders(),
+      );
+    }
+
+
 
 
 
@@ -201,4 +209,35 @@ class ApiService {
         'email': user?.email,
       };
     }
-  }
+
+    Future<void> updateMyArea({
+      required double latitude,
+      required double longitude,
+      double radiusKm = 25,
+    }) async {
+        final headers = await _authHeaders();
+
+        final res = await http.put(
+          Uri.parse('$baseUrl/user/me/area?latitude=$latitude&longitude=$longitude&radius_km=$radiusKm'),
+          headers: headers,
+        );
+
+      if (res.statusCode != 200) {
+        throw Exception(res.body);
+      }
+    }
+
+    Future<void> claimReport(String reportId) async {
+      final headers = await _authHeaders();
+      final res = await http.patch(
+        Uri.parse('$baseUrl/reports/$reportId/claim'),
+        headers: headers,
+      );
+
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        throw Exception(res.body);
+      }
+    }
+
+
+}

@@ -1,21 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:openresq_app/services/api_service.dart';
 import '../models/report.dart';
 import 'dart:math';
-
+import '../services/auth_service.dart';
 class MarkerPopup extends StatelessWidget {
   final Report report;
   final MapController mapController;
   final VoidCallback onClose;
   final VoidCallback onDetails;
+  final auth = AuthService();
+  final String? role;
 
-  const MarkerPopup({
+  MarkerPopup({
     super.key,
     required this.report,
     required this.mapController,
     required this.onClose,
     required this.onDetails,
+    required this.role,
   });
 
   @override
@@ -54,6 +58,28 @@ class MarkerPopup extends StatelessWidget {
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
+              if (role == "responder" && report.assignedTo == null)
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.handshake),
+                  label: const Text("Assign to me"),
+                  onPressed: () async {
+                    try {
+                      await ApiService().claimReport(report.id);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("Report assigned to you."))
+                      );
+                    } catch (_) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("The report is already assigned."))
+                      );
+                    }
+                  }
+                ),
+                if (report.assignedTo != null)
+                  Text("Assigned to: ${report.assignedTo}", style: const TextStyle(fontWeight: FontWeight.bold),),
+                  
               ElevatedButton(
                 onPressed: onDetails,
                 child: const Text("Go to details"),

@@ -37,7 +37,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _init() async {
     final me = await api.getMe();
-    myUserId = me['id'];
+    myUserId = me['uid'];
     await _loadMessages();
   }
 
@@ -54,6 +54,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _loadMessages() async {
     try {
       final data = await api.getChatMessages(widget.reportId);
+      await api.markChatSeen(widget.reportId);
       setState(() {
         messages = data;
         loading = false;
@@ -91,8 +92,26 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  String _formatTime(dynamic ts) {
+    if (ts == null) return "";
+    final dt = DateTime.parse(ts.toString());
+    return "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
+  }
+
+
   Widget _bubble(dynamic msg) {
-    final isMe = msg['senderId'] == myUserId;
+    final isMe = msg['sender_id'] == myUserId;
+
+    Color bubbleColor;
+    if (isMe) {
+      bubbleColor = Colors.blue;
+    } else if (widget.role == 'responder' || widget.role == 'admin') {
+      bubbleColor = Colors.green;
+    }
+    else {
+      bubbleColor = Colors.grey.shade300;
+    }
+
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -100,12 +119,43 @@ class _ChatScreenState extends State<ChatScreen> {
         padding: const EdgeInsets.all(12),
         constraints: const BoxConstraints(maxWidth: 260),
         decoration: BoxDecoration(
-          color: isMe ? Colors.blue : Colors.grey.shade300,
+          color: bubbleColor,
           borderRadius: BorderRadius.circular(16),
         ),
-        child: Text(
-          msg['text'],
-          style: TextStyle(color: isMe ? Colors.white : Colors.black),
+        child: Column(
+          crossAxisAlignment:
+              isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          children: [ 
+            Text(
+              msg['text'],
+              style: TextStyle(color: isMe ? Colors.white : Colors.black),
+            ),
+            const SizedBox(height: 4),
+
+            Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _formatTime(msg['created_at']),
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Colors.white70,
+                ),
+              ),
+              if (isMe) ...[
+                const SizedBox(width: 4),
+                Icon(
+                  msg['seen'] == true
+                      ? Icons.done_all
+                      : Icons.check,
+                  size: 14,
+                  color:
+                      msg['seen'] == true ? Colors.lightBlueAccent : Colors.white70,
+                ),
+              ]
+            ],
+          )
+          ],
         ),
       ),
     );

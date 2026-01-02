@@ -11,6 +11,8 @@ import '../widgets/report_form.dart';
 import 'logs_screen.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/live_reports_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -31,15 +33,69 @@ class _HomeScreenState extends State<HomeScreen> {
   StreamSubscription<Position>? _positionStream;
   bool _followUser = true; // για auto-follow
   Report? _selectedReport;
+  final LiveReportsService live = LiveReportsService();
+  StreamSubscription? _liveSub;
+  final GlobalKey<RefreshIndicatorState> _refreshKey =
+  GlobalKey<RefreshIndicatorState>();
+
 
 
   final MapController _mapController = MapController();
   @override
   void initState() {
     super.initState();
-    loadUserAndReports();
     _goToUserLocation();
     _startLiveLocation();
+    loadUserAndReports();
+    _liveSub = live.connect().listen(
+      (event) {
+        final id = event["id"];
+        final type = event["type"];
+        final data = event["data"];
+
+        setState(() {
+          if (type == "MODIFIED") {
+            final index = reports.indexWhere((r) => r.id == id);
+            if (index != -1) {
+              reports[index] = reports[index].copyWithFromMap(data);
+            }
+          }
+
+          if (type == "ADDED") {
+            reports.add(Report.fromJson({"id": id, ...data}));
+          }
+
+          if (type == "REMOVED") {
+            reports.removeWhere((r) => r.id == id);
+          }
+
+          if (type == "report_assigned") {
+            final reportId= event["report_id"];
+            final assignedTo = event["assigned_to"];
+
+            final index = reports.indexWhere((r) => r.id == reportId);
+            if (index != -1) {
+              reports[index] = reports[index].copyWithAssigned(assignedTo);
+            }
+
+            if (assignedTo == auth.uid) {
+              filteredReports = reports.where((r) => r.assignedTo == auth.uid).toList();
+            }
+          }
+
+          _applyFilter();
+        });
+
+        _refreshKey.currentState?.show();
+
+      },
+      onError: (err) async {
+        debugPrint("Live stream lost, fallback to polling");
+        await loadReports(); // ⬅️ ΤΟ D ΕΙΝΑΙ ΕΔΩ
+      },
+    );
+
+
   }
   
   Future<void> loadUserAndReports() async {
@@ -54,9 +110,9 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       List<dynamic> fetched;
       if (role == 'responder') {
-        fetched = await api.getAllReports();
+        fetched = await api.getNearbyReports();
       } else {
-        fetched = await api.getAllReports();
+        fetched = await api.getNearbyReports();
       }
       setState(() {
         reports = fetched.map((e) => Report.fromJson(e as Map<String,dynamic>)).toList();
@@ -66,6 +122,16 @@ class _HomeScreenState extends State<HomeScreen> {
       print("Error loading reports: $e");
     }
   }
+
+  Stream<List<Report>> getReportsStream() {
+    return FirebaseFirestore.instance
+        .collection('reports')
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => Report.fromJson(doc.data()))
+            .toList());
+  }
+
 
   Future<void> _logout() async {
     await auth.logout();
@@ -109,6 +175,12 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     _mapController.move(latLng, 14.5);
+    await api.updateMyArea(
+      latitude: position.latitude,
+      longitude: position.longitude,
+      radiusKm: 25,
+    );
+
   }
 
   Future<void> _startLiveLocation() async {
@@ -145,24 +217,28 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _positionStream?.cancel();
+    _liveSub?.cancel();
     super.dispose();
   }
 
 
 
 
-  Color _severityColor(String severity) {
-    switch (severity.toLowerCase()) {
+  Color _severityColor(String? severity) {
+    switch (severity?.toLowerCase()) {
       case 'low':
-        return Colors.green;
+        return Colors.green.shade600;
       case 'medium':
-        return Colors.orange;
+        return Colors.orange.shade600;
       case 'high':
-        return Colors.red;
+        return Colors.red.shade700;
+      case 'critical':
+        return Colors.purple.shade700;
       default:
-        return Colors.grey;
+        return Colors.grey.shade600;
     }
   }
+
 
 
   List<Widget> get _pages => [
@@ -261,9 +337,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildReportsPage() {
     return Column(
       children: [
+        Chip(label: const Text('25km radius'), avatar: const Icon(Icons.my_location, size: 16)),
         Padding(
           padding: const EdgeInsets.all(8.0),
-          child: DropdownButton<String>(
+          child: 
+          DropdownButton<String>(
             value: severityFilter ?? 'All',
             items: const [
               DropdownMenuItem(value: 'All', child: Text('All severities')),
@@ -319,9 +397,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             _followUser = false;
                           });
                         },
-                        child: const Icon(
+                        child: Icon(
                           Icons.location_on,
-                          color: Colors.red,
+                          color: _severityColor(r.severity),
                           size: 40,
                         ),
                       ),
@@ -375,6 +453,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         );
                       },
+                      role: role
                     ),
                   ),
 
@@ -402,12 +481,14 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         Expanded(
           child: RefreshIndicator(
+            key: _refreshKey,
             onRefresh: loadReports,
             child: ListView.builder(
               itemCount: filteredReports.length,
               itemBuilder: (context, i) {
                 final r = filteredReports[i];
                 return ListTile(
+                  leading: Icon(Icons.circle, size: 12, color: _severityColor(r.severity)),
                   title: Text(r.title),
                   subtitle: Text('${r.eventType} • ${r.severity} • ${r.status}'),
                   onTap: () {
@@ -428,4 +509,5 @@ class _HomeScreenState extends State<HomeScreen> {
       ],
     );
   }
+
 }

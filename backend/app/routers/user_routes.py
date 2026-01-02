@@ -37,21 +37,9 @@ async def get_user_profile(user=Depends(verify_token)):
 async def update_user_area(
     latitude: float,
     longitude: float,
-    radius_km: float = 20.0,
+    radius_km: float = 25.0,
     user=Depends(verify_token)
 ):
-    """
-    Update user's area of interest.
-    
-    Args:
-        latitude: Center latitude
-        longitude: Center longitude
-        radius_km: Radius in kilometers
-        user: Authenticated user
-    
-    Returns:
-        Updated area info
-    """
     try:
         if radius_km < 1 or radius_km > 100:
             raise HTTPException(status_code=400, detail="Radius must be between 1 and 100 km")

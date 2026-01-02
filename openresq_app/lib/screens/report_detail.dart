@@ -25,6 +25,8 @@ class _ReportDetailState extends State<ReportDetail> {
   final TextEditingController _noteCtrl = TextEditingController();
   final TextEditingController _descCtrl = TextEditingController();
   String? _newStatus;
+  bool get isCitizenOwner => isOwner && widget.role == 'citizen';
+  bool get isStaff => widget.role == 'responder' || widget.role == 'admin';
 
 
   @override
@@ -200,6 +202,8 @@ class _ReportDetailState extends State<ReportDetail> {
   @override
   Widget build(BuildContext context) {
     if (report == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    
+
     return Scaffold(
       appBar: AppBar(title: Text(report!['title'] ?? 'Report')),
       body: Padding(
@@ -207,7 +211,7 @@ class _ReportDetailState extends State<ReportDetail> {
         child: Column(
           children: [
             // DESCRIPTION
-            if (isOwner)
+            if (isCitizenOwner)
               TextField(
                 controller: _descCtrl,
                 maxLines: 4,
@@ -221,7 +225,7 @@ class _ReportDetailState extends State<ReportDetail> {
             const SizedBox(height: 12),
 
             // EVENT TYPE
-            if (isOwner)
+            if (isCitizenOwner)
               DropdownButtonFormField<String>(
                 initialValue: report!['event_type'],
                 decoration: const InputDecoration(
@@ -243,7 +247,7 @@ class _ReportDetailState extends State<ReportDetail> {
               Text('Type: ${report!['event_type']}'),
             const SizedBox(height: 12),
             // SEVERITY
-            if (isOwner)
+            if (isCitizenOwner)
               DropdownButtonFormField<String>(
                 value: report!['severity'],
                 decoration: const InputDecoration(
@@ -282,9 +286,8 @@ class _ReportDetailState extends State<ReportDetail> {
               const SizedBox(height: 10),
               ElevatedButton(onPressed: _submitResponderUpdate, child: const Text('Save changes'))
             ],
-            const Spacer(),
             
-            if (isOwner)
+            if (isCitizenOwner)
               ElevatedButton.icon(
                 icon: const Icon(Icons.save),
                 label: const Text('Update report'),
@@ -305,7 +308,7 @@ class _ReportDetailState extends State<ReportDetail> {
                     Navigator.pop(context);
                 },
               ),
-              if (isOwner)
+              if (isCitizenOwner)
                 ElevatedButton.icon(
                   icon: const Icon(Icons.delete),
                   label: const Text('Delete my report'),

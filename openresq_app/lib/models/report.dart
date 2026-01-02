@@ -8,6 +8,8 @@ class Report {
   final double longitude;
   final List<dynamic> media;
   final String status;
+  final String? assignedTo;
+  final DateTime? assignedAt;
 
   Report({
     required this.id,
@@ -19,7 +21,44 @@ class Report {
     required this.longitude,
     required this.media,
     required this.status,
+    required this.assignedTo,
+    required this.assignedAt,
   });
+
+  Report copyWithFromMap(Map<String, dynamic> data) {
+    return Report(
+      id: id,
+      title: data["title"] ?? title,
+      description: data["description"] ?? description,
+      severity: data["severity"] ?? severity,
+      status: data["status"] ?? status,
+      latitude: data["latitude"] ?? latitude,
+      longitude: data["longitude"] ?? longitude,
+      media: data["media"] ?? media,
+      eventType: data["event_type"] ?? eventType,
+      assignedTo: data["assigned_to"] ?? assignedTo,
+      assignedAt: data["assigned_at"] != null
+          ? DateTime.tryParse(data["assigned_at"])
+          : null,
+    );
+  }
+
+  Report copyWithAssigned(String uid) {
+    return Report(
+      id: id,
+      title: title,
+      description: description,
+      eventType: eventType,
+      severity: severity,
+      status: status,
+      media: media,
+      latitude: latitude,
+      longitude: longitude,
+      assignedTo: uid,
+      assignedAt: DateTime.now(),
+    );
+  }
+
 
   factory Report.fromJson(Map<String, dynamic> json) {
     double toDoubleSafe(dynamic v) {
@@ -42,6 +81,8 @@ class Report {
       lngVal = lngVal ?? loc['lng'] ?? loc['longitude'];
     }
 
+    
+
     return Report(
       id: (json['id'] ?? '').toString(),
       title: (json['title'] ?? '').toString(),
@@ -52,6 +93,10 @@ class Report {
       longitude: toDoubleSafe(lngVal),
       media: json['media'] ?? [],
       status: (json['status'] ?? 'pending').toString(),
+      assignedTo: json['assigned_to']?.toString(),
+      assignedAt: json['assigned_at'] != null
+          ? DateTime.tryParse(json['assigned_at'])
+          : null,
     );
   }
 }

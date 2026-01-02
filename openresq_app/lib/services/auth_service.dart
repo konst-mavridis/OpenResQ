@@ -5,6 +5,11 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  String? get uid => _auth.currentUser?.uid;
+  String? get email => _auth.currentUser?.email;
+
+  bool get isLoggedIn => _auth.currentUser != null;
+
   Future<User?> loginWithEmail(String email, String password) async {
     final cred = await _auth.signInWithEmailAndPassword(email: email, password: password);
     return cred.user;

@@ -2,7 +2,12 @@
 Reports/Incidents router - unified endpoint for report creation, retrieval, and updates.
 All business logic is delegated to ReportService.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException 
+from fastapi.responses import StreamingResponse
+import json
+import time 
+import queue
+import threading
 import logging
 from typing import List, Optional
 import datetime
@@ -19,6 +24,29 @@ from firebase_admin import firestore
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/reports", tags=["Reports"])
 report_service = ReportService()
+firestore_listeners = {}
+
+def start_reports_listener(user_id: str, q):
+    def on_snapshot(col_snapshot, changes, read_time):
+        for change in changes:
+            doc = change.document
+
+            # 🔹 μόνο τα changed fields
+            update_mask = {}
+            if change.type.name == "MODIFIED":
+                for field in doc._data:
+                    update_mask[field] = doc.get(field)
+
+            payload = {
+                "type": change.type.name,  # ADDED / MODIFIED / REMOVED
+                "id": doc.id,
+                "data": update_mask if update_mask else doc.to_dict()
+            }
+
+            q.put(json.dumps(payload))
+
+    query = db.collection("reports").where("deleted", "!=", True)
+    firestore_listeners[user_id] = query.on_snapshot(on_snapshot)
 
 
 @router.post("/", response_model=dict)
@@ -52,12 +80,42 @@ async def create_report(
 
 @router.get("/nearby")
 def get_nearby_reports(user=Depends(verify_token)):
+
     try:
         reports = report_service.get_nearby_reports(user["uid"])
         return reports
+
+
     except Exception as e:
         logger.error(f"Failed to get nearby reports: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve reports")
+
+@router.get("/nearby/live")
+def live_nearby_reports(user=Depends(verify_token)):
+    user_id = user["uid"]
+    q = queue.Queue()
+
+    start_reports_listener(user_id, q)
+
+    def stream():
+        try:
+            while True:
+                if not q.empty():
+                    yield f"data: {q.get()}\n\n"
+                time.sleep(0.25)
+        except GeneratorExit:
+            listener = firestore_listeners.pop(user_id, None)
+            if listener:
+                listener()
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        }
+    )
 
 @router.get("/all", response_model=List[dict])
 def all_reports(user=Depends(verify_token)):
@@ -116,6 +174,38 @@ def update_report_status(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+@router.patch("/{report_id}/claim", response_model=dict)
+def claim_report(report_id: str, user=Depends(require_role("responder","admin"))):
+    """
+    Assign the report to the current responder.
+    Once claimed, no other responder can claim it.
+    """
+    doc_ref = db.collection("reports").document(report_id)
+    doc = doc_ref.get()
+
+    if not doc.exists:
+        raise HTTPException(404, "Report not found")
+
+    report = doc.to_dict()
+
+    if report.get("assigned_to"):
+        raise HTTPException(400, f"Report already assigned to {report['assigned_to']}")
+
+    # assign to current responder
+    doc_ref.update({
+        "assigned_to": user["uid"],
+        "assigned_at": datetime.datetime.utcnow()
+    })
+
+    # websocket broadcast
+    import asyncio
+    asyncio.create_task(ws_manager.broadcast({
+        "type": "report_assigned",
+        "report_id": report_id,
+        "assigned_to": user["uid"]
+    }))
+
+    return {"message": f"Report assigned to {user['uid']}"}
 
 @router.post("/{report_id}/notes")
 def add_responder_note(
@@ -301,7 +391,7 @@ def delete_own_report(
 
 # Chat
 @router.post("/{report_id}/chat")
-def send_message(report_id: str, data: ChatMessageCreate, user=Depends(verify_token)):
+async def send_message(report_id: str, data: ChatMessageCreate, user=Depends(verify_token)):
     chat_ref = db.collection("chats").document(report_id)
     msg_ref = chat_ref.collection("messages").document()
     msg_ref.set({
@@ -357,3 +447,18 @@ def send_push_token(data: PushTokenCreate, user=Depends(verify_token)):
             "updated_at": datetime.datetime.utcnow()
     }, merge=True)
     return {"message": "Push token saved"}
+
+@router.post("/{report_id}/chat/seen")
+def mark_seen(report_id: str, user=Depends(verify_token)):
+    msgs = (
+        db.collection("chats")
+        .document(report_id)
+        .collection("messages")
+        .where("sender_id", "!=", user["uid"])
+        .stream()
+    )
+
+    for m in msgs:
+        m.reference.update({"seen": True})
+
+    return {"status": "ok"}
