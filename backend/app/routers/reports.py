@@ -175,7 +175,7 @@ def update_report_status(
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.patch("/{report_id}/claim", response_model=dict)
-def claim_report(report_id: str, user=Depends(require_role("responder","admin"))):
+async def claim_report(report_id: str, user=Depends(require_role("responder","admin"))):
     """
     Assign the report to the current responder.
     Once claimed, no other responder can claim it.
@@ -199,7 +199,7 @@ def claim_report(report_id: str, user=Depends(require_role("responder","admin"))
 
     # websocket broadcast
     import asyncio
-    asyncio.create_task(ws_manager.broadcast({
+    await asyncio.create_task(ws_manager.broadcast({
         "type": "report_assigned",
         "report_id": report_id,
         "assigned_to": user["uid"]

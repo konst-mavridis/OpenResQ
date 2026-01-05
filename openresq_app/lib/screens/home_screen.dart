@@ -44,9 +44,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _goToUserLocation();
-    _startLiveLocation();
-    loadUserAndReports();
+    _initApp();
     _liveSub = live.connect().listen(
       (event) {
         final id = event["id"];
@@ -97,7 +95,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
 
   }
-  
+  Future<void> _initApp() async {
+    await _goToUserLocation();   // ⬅️ ΠΡΩΤΑ location
+    _startLiveLocation();        // μετά live tracking
+    await loadUserAndReports();  // ⬅️ ΤΕΛΕΥΤΑΙΟ backend
+  }
+
   Future<void> loadUserAndReports() async {
     // get role from backend
     try {
@@ -239,6 +242,18 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Offset _getPopupPosition(Report report) {
+    final projected = _mapController.camera.project(
+      LatLng(report.latitude, report.longitude),
+    );
+
+    final origin = _mapController.camera.pixelOrigin;
+
+    return Offset(
+      projected.x - origin.x - 100, // κέντρο popup
+      projected.y - origin.y - 120, // πάνω από marker
+    );
+  }
 
 
   List<Widget> get _pages => [
@@ -434,31 +449,37 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                   ],
                 ),
-                if (_selectedReport != null)
-                  Positioned(
-                    child: MarkerPopup(
-                      report: _selectedReport!,
-                      mapController: _mapController,
-                      onClose: () {
-                        setState(() => _selectedReport = null);
-                      },
-                      onDetails: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ReportDetail(
-                              reportId: _selectedReport!.id,
-                              role: role,
+                if (_selectedReport != null) ...[
+                  Builder(builder: (context){
+                    final pos = _getPopupPosition(_selectedReport!);
+                    return Positioned(
+                      left: pos.dx,
+                      top: pos.dy,
+                      child: MarkerPopup(
+                        report: _selectedReport!,
+                        mapController: _mapController,
+                        onClose: () {
+                          setState(() => _selectedReport = null);
+                        },
+                        onDetails: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ReportDetail(
+                                reportId: _selectedReport!.id,
+                                role: role,
+                              ),
                             ),
-                          ),
-                        );
-                      },
-                      role: role
-                    ),
-                  ),
+                          );
+                        },
+                        role: role,
+                      ),
+                    );
+                  })
 
               ],
-            ),
+           ],),
+
                   Positioned(
                     bottom: 16,
                     right: 16,

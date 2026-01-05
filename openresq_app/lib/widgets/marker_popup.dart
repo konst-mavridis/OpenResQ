@@ -5,6 +5,7 @@ import 'package:openresq_app/services/api_service.dart';
 import '../models/report.dart';
 import 'dart:math';
 import '../services/auth_service.dart';
+import '../screens/navigations_screen.dart';
 class MarkerPopup extends StatelessWidget {
   final Report report;
   final MapController mapController;
@@ -37,10 +38,7 @@ class MarkerPopup extends StatelessWidget {
         );
 
 
-    return Positioned(
-      left: point.x - 100.0,
-      top: point.y - 120.0,
-      child: Material(
+      return Material(
         elevation: 6,
         borderRadius: BorderRadius.circular(12),
         child: Container(
@@ -58,7 +56,8 @@ class MarkerPopup extends StatelessWidget {
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              if (role == "responder" && report.assignedTo == null)
+
+              if (role != "citizen" && report.assignedTo == null)
                 ElevatedButton.icon(
                   icon: const Icon(Icons.handshake),
                   label: const Text("Assign to me"),
@@ -66,32 +65,42 @@ class MarkerPopup extends StatelessWidget {
                     try {
                       await ApiService().claimReport(report.id);
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text("Report assigned to you."))
+                        const SnackBar(content: Text("Report assigned to you")),
                       );
-                    } catch (_) {
+                      Navigator.of(context).pushReplacement(
+                        MaterialPageRoute(
+                          builder: (_) => NavigationScreen(report: report),
+                        ),
+                      );
+                      onClose();
+                    } catch (e) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text("The report is already assigned."))
+                        const SnackBar(content: Text("Already assigned")),
                       );
+                      onClose();
+
                     }
-                  }
+                  },
                 ),
-                if (report.assignedTo != null)
-                  Text("Assigned to: ${report.assignedTo}", style: const TextStyle(fontWeight: FontWeight.bold),),
-                  
+
+              if (report.assignedTo != null)
+                Text(
+                  "Assigned to: ${report.assignedTo}",
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
               ElevatedButton(
                 onPressed: onDetails,
                 child: const Text("Go to details"),
               ),
+
               TextButton(
                 onPressed: onClose,
                 child: const Text("Close"),
-              )
+              ),
             ],
           ),
         ),
-      ),
-    );
-  }
+      );
+
+    }
 }
