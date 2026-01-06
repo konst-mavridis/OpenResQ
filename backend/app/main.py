@@ -46,10 +46,6 @@ async def startup_event():
         logger.error(f"Failed to initialize Firebase: {e}")
         raise
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    logger.info("Shutting down OpenResQ backend")
-
 # Add rate limiter to app
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, lambda request, exc: HTTPException(status_code=429, detail="Rate limit exceeded"))

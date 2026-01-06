@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 
 class LiveReportsService {
-  final String baseUrl = "http://10.0.2.2:8000";
+  final String baseUrl = "https://openresq.onrender.com";
 
   Stream<Map<String, dynamic>> connect() async* {
     final user = FirebaseAuth.instance.currentUser;

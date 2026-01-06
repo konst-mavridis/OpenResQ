@@ -87,4 +87,5 @@ class DefaultFirebaseOptions {
     storageBucket: 'openresq-b4c5f.firebasestorage.app',
     measurementId: 'G-1X508QRJ9Q',
   );
+
 }

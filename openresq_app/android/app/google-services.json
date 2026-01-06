@@ -29,6 +29,13 @@
             {
               "client_id": "713746797388-hv1qaufhkf08u9rv625ljh13qdaagb3k.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "713746797388-81a9lkrb3ph4asbejgaek569bp9ob4pg.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.openresqApp"
+              }
             }
           ]
         }

@@ -33,7 +33,7 @@ dependencies:
   firebase_core: ^4.2.1
   firebase_auth: ^6.1.2
   cloud_firestore: ^6.1.0
-  http: ^1.1.0
+  http: ^1.2.0
   provider: 6.1.5+1
   fluttertoast: ^9.0.0
   flutter_secure_storage: ^9.2.4
@@ -53,6 +53,7 @@ dependencies:
   google_maps_flutter: ^2.6.0
   flutter_polyline_points: ^2.0.0
   flutter_tts: ^3.8.5
+  audioplayers: ^5.2.0
 
 dev_dependencies:
   flutter_test:
