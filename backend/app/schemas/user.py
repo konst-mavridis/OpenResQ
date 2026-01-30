@@ -10,6 +10,9 @@ class RegisterUser(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
     display_name: str = Field(..., min_length=1, max_length=100)
+    trust_score: int = Field(default=50, ge=0, le=100)
+    reports_valid: int = Field(default=0, ge=0)
+    reports_invalid: int = Field(default=0, ge=0)
     
     class Config:
         example = {
@@ -28,6 +31,9 @@ class UserResponse(BaseModel):
     area: Optional[dict] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
+    trust_score: int = Field(default=50, ge=0, le=100)
+    reports_valid: int = Field(default=0, ge=0)
+    reports_invalid: int = Field(default=0, ge=0)
 
 
 class UpdateUserArea(BaseModel):

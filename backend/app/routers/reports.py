@@ -19,12 +19,23 @@ from app.schemas.report import CreateReport, PushTokenCreate, UpdateReport, Chat
 from app.utils.logger import log_action
 from app.utils.ws_manager import ws_manager
 from app.utils.geo import is_within_radius
-from firebase_admin import firestore
+from firebase_admin import firestore, storage
+from ..services.validation_service import calculate_confidence, InputValidator
+from ..services.incident_matcher import find_similar_reports
+from ..services.ai_service import predict_fire  
+import base64
+import openai
+import os 
+import requests
+import asyncio
+from ..services.trust_service import TrustService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/reports", tags=["Reports"])
 report_service = ReportService()
 firestore_listeners = {}
+openai.api_key = os.getenv("OPENAI_API_KEY")  # set στο environment
+
 
 def start_reports_listener(user_id: str, q):
     def on_snapshot(col_snapshot, changes, read_time):
@@ -49,12 +60,154 @@ def start_reports_listener(user_id: str, q):
     firestore_listeners[user_id] = query.on_snapshot(on_snapshot)
 
 
-@router.post("/", response_model=dict)
-async def create_report(
-    data: CreateReport,
-    user=Depends(verify_token)
-):
+def predict_fire_openai(image_url: str) -> dict:
+    """
+    Καλεί OpenAI Vision για να εντοπίσει φωτιά σε εικόνα.
+    Επιστρέφει: {"fire": True/False, "confidence": 0.0-1.0}
+    """
     try:
+        # Κατέβασε εικόνα
+        resp = requests.get(image_url)
+        resp.raise_for_status()
+        img_b64 = base64.b64encode(resp.content).decode("utf-8")
+
+        prompt = (
+            "You are an AI that detects fire in images. "
+            "The image is provided as base64. "
+            "Respond ONLY in JSON format with keys 'fire' (true/false) and 'confidence' (0.0-1.0)."
+        )
+
+        response = openai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": f"Image (base64): {img_b64}"}
+            ]
+        )
+
+        # ✅ Το σωστό για GPT-4o-mini: choices[0].message.content
+        text = response.choices[0].message.content
+        if not text:
+            raise ValueError("Empty response from OpenAI")
+        try:
+            result = json.loads(text)
+        except json.JSONDecodeError:
+            print(f"[AI ERROR] Cannot parse OpenAI JSON: {text}")
+            result = {"fire": False, "confidence": 0.0}
+
+    except Exception as e:
+        print(f"[AI ERROR] OpenAI prediction failed: {e}")
+        return {"fire": False, "confidence": 0.0} 
+
+@router.post("/", response_model=dict)
+async def create_report(data: CreateReport, user=Depends(verify_token)):
+    try:
+        print("[DEBUG] Received report data:", data.dict())
+        print("[DEBUG] User:", user)
+
+        # ==========================
+        # 1) INPUT VALIDATION
+        # ==========================
+        from app.services.validation_service import InputValidator
+
+        InputValidator.validate_report(
+            title=data.title,
+            description=data.description,
+            event_type=data.event_type,
+            severity=data.severity,
+            latitude=data.latitude,
+            longitude=data.longitude
+        )
+        print("[DEBUG] Input validation passed")
+
+        # ==========================
+        # 2) DUPLICATE CHECK
+        # ==========================
+        recent_reports = report_service.get_recent_reports(hours=2)
+
+        for r in recent_reports:
+            if (
+                r.get("title") == data.title and
+                abs(r.get("latitude") - data.latitude) < 0.0005 and
+                abs(r.get("longitude") - data.longitude) < 0.0005
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Similar report already exists nearby"
+                )
+
+        print("[DEBUG] Duplicate check passed")
+
+        # ==========================
+        # 3) BUSINESS RULES
+        # ==========================
+
+        # Fire reports must have media
+        if data.event_type == "fire" and not data.media:
+            raise HTTPException(
+                status_code=400,
+                detail="Fire reports require at least one image"
+            )
+
+        # Low trust users cannot submit reports
+        if user.get("trust_score", 1.0) < 0.2:
+            raise HTTPException(
+                status_code=403,
+                detail="Your trust score is too low to submit reports"
+            )
+
+        trust_service = TrustService(db)
+
+        if not trust_service.can_submit(user["uid"], data.event_type):
+            raise HTTPException(status_code=403, detail="Your trust score is too low to submit this type of report")
+
+        # Μετά την δημιουργία του report και AI analysis
+        trust_service.apply_report_feedback(
+            user_id=user["uid"],
+            report_verified=True if ai_score > 0.7 else False,
+            ai_confidence=ai_score
+        )
+        # ==========================
+        # 4) UPLOAD MEDIA
+        # ==========================
+        uploaded_media = []
+
+        if data.media:
+            for idx, m in enumerate(data.media):
+                print(f"[DEBUG] Uploading image {idx}: {m}")
+                uploaded_url = report_service.upload_image_to_firebase(m["url"])
+                uploaded_media.append({
+                    "url": uploaded_url,
+                    "type": m.get("type", "image")
+                })
+                print(f"[UPLOAD] Uploaded {idx}: {uploaded_url}")
+        else:
+            print("[DEBUG] No media to upload")
+
+        # ==========================
+        # 5) RUN AI VISION (IF IMAGE)
+        # ==========================
+        ai_score = 0.0
+        ai_fire_detected = False
+
+        if uploaded_media:
+            first_image_url = uploaded_media[0]["url"]
+            print(f"[DEBUG] Running AI on: {first_image_url}")
+
+            ai_result = report_service.run_ai_analysis(first_image_url)
+
+            ai_fire_detected = ai_result["fire"]
+            ai_score = ai_result["confidence"]
+
+            print(f"[AI] score={ai_score}, fire={ai_fire_detected}")
+
+            # If AI is 0 confidence and event is fire → soft warning
+            if data.event_type == "fire" and ai_score < 0.1:
+                print("[WARNING] Low AI confidence for fire report")
+
+        # ==========================
+        # 6) CREATE REPORT
+        # ==========================
         report = report_service.create_report(
             user_id=user["uid"],
             title=data.title,
@@ -63,20 +216,56 @@ async def create_report(
             severity=data.severity,
             latitude=data.latitude,
             longitude=data.longitude,
-            media=data.media
+            media=uploaded_media,
+            ai_score=ai_score,
+            ai_fire_detected=ai_fire_detected,
         )
-        
-        # Broadcast to WebSocket clients
-        await ws_manager.broadcast({
-                    "type": "new_report",
-                    "report_id": report["id"],
-                    "report": report
-        })
-        
-        return report
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
+        print("[DEBUG] Report created:", report["id"])
+
+        # ==========================
+        # 7) CALCULATE CONFIDENCE
+        # ==========================
+        from app.services.validation_service import calculate_confidence
+
+        similar_reports = find_similar_reports(
+            data.latitude,
+            data.longitude,
+            recent_reports,
+            radius_km=0.1
+        )
+
+        confidence = calculate_confidence(
+            report=report,
+            nearby_reports=len(similar_reports),
+            user_trust=user.get("trust_score", 0.5),
+            community_confirms=0,
+            ai_fire_score=ai_score
+        )
+
+        report_service.update_report(
+            report_id=report["id"],
+            updates={"confidence": confidence}
+        )
+
+        print(f"[DEBUG] Confidence calculated: {confidence}")
+
+        # ==========================
+        # 8) WEBSOCKET BROADCAST
+        # ==========================
+        await asyncio.create_task(ws_manager.broadcast({
+            "type": "new_report",
+            "report_id": report["id"],
+            "report": report
+        }))
+
+        print("[DEBUG] WebSocket broadcast done")
+
+        return report
+
+    except Exception as e:
+        print("[ERROR] Failed to create report:", e)
+        raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/nearby")
 def get_nearby_reports(user=Depends(verify_token)):

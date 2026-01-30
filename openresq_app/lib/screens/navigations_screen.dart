@@ -23,11 +23,21 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
   final FlutterTts tts = FlutterTts();
 
+  void _onMapCreated(GoogleMapController controller) {
+    _mapController = controller;
+  }
 
   String eta = "--";
   String distance = "--";
 
   double? _lastDistance;
+
+  String instruction = "Starting navigation";
+  double nextTurnDistance = 0;
+  int _lastSpokenMeter = 9999;
+
+  List<LatLng> _routePoints = [];
+  int _currentRouteIndex = 0;
 
   @override
   void initState() {
@@ -69,6 +79,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
       final route = result.points
           .map((p) => LatLng(p.latitude, p.longitude))
           .toList();
+      
+      _routePoints = route;
 
       setState(() {
         _polylines
@@ -82,6 +94,55 @@ class _NavigationScreenState extends State<NavigationScreen> {
             ),
           );
       });
+    }
+  }
+
+  void _updateNavigation(Position pos) {
+    if (_routePoints.isEmpty || _currentRouteIndex >= _routePoints.length - 1) {
+      instruction = "You have arrived at your destination";
+      return;
+    }
+
+    final current = LatLng(pos.latitude, pos.longitude);
+    final nextPoint = _routePoints[_currentRouteIndex + 1];
+
+    final distance = Geolocator.distanceBetween(
+      current.latitude,
+      current.longitude,
+      nextPoint.latitude,
+      nextPoint.longitude,
+    );
+
+    nextTurnDistance = distance;
+
+    if (distance < 5) {
+      _currentRouteIndex++;
+    }
+
+    final bearingDiff = (pos.heading -
+          Geolocator.bearingBetween(
+            current.latitude,
+            current.longitude,
+            nextPoint.latitude,
+            nextPoint.longitude,
+          )).abs();
+
+    if (bearingDiff > 30 && bearingDiff < 150) {
+      instruction = "Turn right ${(bearingDiff).round()} degrees";
+    } else if (bearingDiff >= 150) {
+      instruction = "Turn left ${(180 - bearingDiff).round()} degrees";
+    } else {
+      instruction = "Continue straight";
+    }
+
+    if (distance <= 50 && _lastSpokenMeter - distance > 50) {
+      speak("$instruction in 50 meters");
+      _lastSpokenMeter = 50;
+    }
+
+    if ((distance ~/ 5) != _lastSpokenMeter) {
+      _lastSpokenMeter = distance ~/ 5;
+      setState(() {});
     }
   }
 
@@ -128,6 +189,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
       _currentPos = LatLng(pos.latitude, pos.longitude);
 
       _updateEtaAndDistance(pos);
+      _updateNavigation(pos);
+
       speak("You are $distance away, estimated time of arrival is $eta");
       _mapController?.animateCamera(
         CameraUpdate.newCameraPosition(
@@ -160,49 +223,138 @@ class _NavigationScreenState extends State<NavigationScreen> {
     return Scaffold(
       body: Stack(
         children: [
+          /// 🗺 MAP
           GoogleMap(
             initialCameraPosition: CameraPosition(
               target: _currentPos!,
               zoom: 18,
               tilt: 70,
             ),
-            onMapCreated: (c) => _mapController = c,
+            onMapCreated: _onMapCreated,
             myLocationEnabled: true,
+            myLocationButtonEnabled: false,
             polylines: _polylines,
-            markers: {
-              Marker(
-                markerId: const MarkerId("target"),
-                position: LatLng(
-                  widget.report.latitude,
-                  widget.report.longitude,
-                ),
-              ),
-            },
           ),
 
+          /// 🔼 TOP POPUP – TURN INSTRUCTION
           Positioned(
-            top: 50,
+            top: 40,
             left: 16,
             right: 16,
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.black87,
-                borderRadius: BorderRadius.circular(14),
+            child: Material(
+              elevation: 8,
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.navigation, size: 32, color: Colors.blue),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            instruction,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            "Σε ${nextTurnDistance.toStringAsFixed(0)} μ",
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text("ETA: $eta",
-                      style: const TextStyle(color: Colors.white)),
-                  Text("DIST: $distance",
-                      style: const TextStyle(color: Colors.white)),
-                ],
+            ),
+          ),
+
+          /// 🔽 BOTTOM POPUP – ETA & DISTANCE
+          Positioned(
+            bottom: 24,
+            left: 16,
+            right: 16,
+            child: Material(
+              elevation: 8,
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 14,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _InfoTile(
+                      icon: Icons.timer,
+                      label: "ETA",
+                      value: eta ?? "--",
+                    ),
+                    _InfoTile(
+                      icon: Icons.route,
+                      label: "Distance",
+                      value: distance ?? "--",
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+
+
+class _InfoTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _InfoTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: Colors.blue),
+        const SizedBox(width: 8),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

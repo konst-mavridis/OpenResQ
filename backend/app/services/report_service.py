@@ -2,16 +2,23 @@
 Report service - handles report/incident creation, updates, and retrieval.
 """
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid
 import logging
+from firebase_admin import storage
 from app.firebase_config import get_db, get_fcm
 from app.utils.geo import is_within_radius
 from app.utils.logger import log_action
 import math
+import requests
+from io import BytesIO
+from openai import OpenAI
+import json
+import base64
+
 
 logger = logging.getLogger(__name__)
-
+client = OpenAI()
 
 class ReportService:
     """Service for report/incident operations."""
@@ -33,6 +40,112 @@ class ReportService:
         )
         return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     
+    
+    def upload_image_to_firebase(self, file_url: str, folder: str = "reports") -> str:
+        """
+        Κατεβάζει την εικόνα από το URL και την ανεβάζει στο Firebase Storage.
+        Επιστρέφει το δημόσιο URL.
+
+        Args:
+            file_url: URL εικόνας
+            folder: φάκελος στο storage
+
+        Returns:
+            public URL της εικόνας
+        """
+        try:
+            # Κατέβασε την εικόνα
+            response = requests.get(file_url)
+            if response.status_code != 200:
+                raise Exception(f"Failed to download image: {file_url}")
+            
+            blob_name = f"{folder}/{uuid.uuid4()}.jpg"
+            bucket = storage.bucket()
+            blob = bucket.blob(blob_name)
+            
+            blob.upload_from_file(BytesIO(response.content), content_type="image/jpeg")
+            blob.make_public()  # ώστε να πάρουμε public URL
+            return blob.public_url
+        except Exception as e:
+            raise Exception(f"Firebase upload failed: {str(e)}")
+    def run_ai_analysis(self, image_url: str) -> dict:
+        """
+        OpenAI Vision με το νέο Responses API (όπως στα docs).
+        Επιστρέφει: {"fire": bool, "confidence": float}
+        """
+
+        try:
+            print("\n========== [AI DEBUG START] ==========")
+            print(f"[AI] Vision URL: {image_url}")
+
+            # ---- 1) Κατέβασμα εικόνας ----
+            resp = requests.get(image_url, timeout=20)
+            resp.raise_for_status()
+            img_bytes = resp.content
+            img_b64 = base64.b64encode(img_bytes).decode("utf-8")
+
+            print(f"[AI] Download OK — size: {len(img_bytes)/1024:.2f} KB")
+
+            # ---- 2) Prompt ----
+            prompt = """
+            Analyze this image carefully.
+
+            Your task:
+            - Determine if there is visible FIRE or heavy SMOKE.
+            - Ignore fog, dust, sunset, headlights, or reflections.
+            - If you see real flames OR dense burning smoke, mark fire=true.
+
+            Return ONLY valid JSON like:
+            {
+            "fire": true/false,
+            "confidence": 0.0-1.0
+            }
+            """
+
+            # ---- 3) Κλήση OpenAI (όπως στα docs) ----
+            response = client.responses.create(
+                model="gpt-4.1",
+                input=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "input_text", "text": prompt},
+                            {
+                                "type": "input_image",
+                                "image_url": f"data:image/jpeg;base64,{img_b64}",
+                            },
+                        ],
+                    }
+                ],
+            )
+
+            # ---- 4) Πάρε καθαρό κείμενο ----
+            text = response.output_text.strip()
+            print("\n[AI] RAW OpenAI response:")
+            print(text)
+
+            # ---- 5) Μετέτρεψε σε JSON ----
+            try:
+                result = json.loads(text)
+                fire = bool(result.get("fire", False))
+                confidence = float(result.get("confidence", 0.0))
+
+                print(f"[AI] FINAL RESULT -> fire={fire}, confidence={confidence}")
+                print("========== [AI DEBUG END] ==========\n")
+
+                return {"fire": fire, "confidence": confidence}
+
+            except json.JSONDecodeError as je:
+                print("[AI] JSON PARSE ERROR:", je)
+                print("Returning defaults")
+                return {"fire": False, "confidence": 0.0}
+
+        except Exception as e:
+            print("\n[AI] CRITICAL ERROR:", e)
+            print("========== [AI DEBUG END] ==========\n")
+            return {"fire": False, "confidence": 0.0}
+
+
     def create_report(
         self,
         user_id: str,
@@ -43,28 +156,21 @@ class ReportService:
         latitude: float,
         longitude: float,
         media: Optional[List[Dict[str, Any]]] = None,
-    ) -> Dict[str, Any]:
-        """
-        Create a new report/incident.
-        
-        Args:
-            user_id: Creator user ID
-            title: Report title
-            description: Report description
-            event_type: Type of event
-            severity: Severity level (low, medium, high, critical)
-            latitude: Latitude
-            longitude: Longitude
-            media: Optional media attachments
-        
-        Returns:
-            Report data with ID
-        """
+        ai_score: Optional[float] = 0.0,
+        ai_fire_detected: Optional[bool] = False
+    ):
         try:
-            report_id = str(uuid.uuid4())
-            
+            uploaded_media = []
+            if media:
+                for i, m in enumerate(media):
+                    if "file_path" in m:
+                        url = self.upload_image_to_firebase(m["file_path"])
+                        uploaded_media.append({"url": url, "type": "image"})
+                    elif "url" in m:
+                        uploaded_media.append({"url": m["url"], "type": m.get("type", "image")})
+
             report_data = {
-                "id": report_id,
+                "id": str(uuid.uuid4()),
                 "uid": user_id,
                 "title": title,
                 "description": description,
@@ -72,49 +178,25 @@ class ReportService:
                 "severity": severity,
                 "latitude": latitude,
                 "longitude": longitude,
-                "media": media or [],
-                "status": "pending",
-                "responder_notes": [],
+                "media": uploaded_media,
+                "ai_score": ai_score,
+                "ai_fire_detected": ai_fire_detected,
+                "status": "pending",          # default
+                "votes": {},
+                "confidence": 0.5,            # ξεκινάει στη μέση
+                "needs_admin_review": False,  # ← ΝΕΟ
                 "created_at": datetime.utcnow(),
-                "updated_at": datetime.utcnow()
+                "updated_at": datetime.utcnow(),
             }
-            
-            self.db.collection("reports").document(report_id).set(report_data)
-            
-            log_action(
-                logger,
-                "report_creation",
-                "success",
-                user_id=user_id,
-                resource_id=report_id,
-                details={"event_type": event_type, "severity": severity}
-            )
-            
-            # Send FCM notification to responders
-            try:
-                message = {
-                    "notification": {
-                        "title": "New incident",
-                        "body": f"{event_type} - {severity}"
-                    },
-                    "topic": "responders",
-                    "data": {"report_id": report_id}
-                }
-                # Send would go here with FCM
-            except Exception as e:
-                logger.warning(f"Failed to send FCM notification: {e}")
-            
+
+            self.db.collection("reports").document(report_data["id"]).set(report_data)
+            print(f"[DEBUG] Created report: {report_data}")
             return report_data
+
         except Exception as e:
-            log_action(
-                logger,
-                "report_creation",
-                "failed",
-                user_id=user_id,
-                details={"error": str(e), "event_type": event_type}
-            )
+            print(f"[ERROR] Failed to create report: {e}")
             raise
-    
+
     def get_report(self, report_id: str) -> Optional[Dict[str, Any]]:
         """
         Get report by ID.
@@ -189,7 +271,22 @@ class ReportService:
 
         except Exception as e:
             raise
+    def get_recent_reports(self, hours):
+        """
+        Επιστρέφει όλα τα reports που δημιουργήθηκαν τις τελευταίες `hours` ώρες.
+        """
+        now = datetime.utcnow()
+        past_time = now - timedelta(hours=hours)
 
+        reports = []
+        query = self.db.collection("reports").where("deleted", "!=", True).stream()
+        for r in query:
+            d = r.to_dict()
+            created_at = d.get("created_at")
+            if created_at and created_at >= past_time:
+                d["id"] = r.id
+                reports.append(d)
+        return reports
     def update_report_status(
         self,
         report_id: str,
@@ -265,4 +362,24 @@ class ReportService:
             return True
         except Exception as e:
             logger.error(f"Failed to add responder note: {e}")
+            raise
+
+    def update_report(self, report_id: str, updates: dict) -> Dict[str, Any]:
+        """
+        Update any fields in a report.
+
+        Args:
+            report_id: Report ID
+            updates: Dict of fields to update
+
+        Returns:
+            Updated report dict
+        """
+        try:
+            updates["updated_at"] = datetime.utcnow()
+            self.db.collection("reports").document(report_id).update(updates)
+            doc = self.db.collection("reports").document(report_id).get()
+            return doc.to_dict()
+        except Exception as e:
+            logger.error(f"Failed to update report {report_id}: {e}")
             raise

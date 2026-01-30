@@ -13,7 +13,7 @@ import 'package:geolocator/geolocator.dart';
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/live_reports_service.dart';
-
+import 'reviewReports.dart';
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
   @override State<HomeScreen> createState() => _HomeScreenState();
@@ -259,6 +259,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Widget> get _pages => [
         _buildReportsPage(),
         const LogsPage(), // το page που φτιάξαμε
+        const ReviewReportsPage(),
       ];
 
   void _onSelectPage(int index) {
@@ -328,6 +329,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 leading: const Icon(Icons.list_alt),
                 title: const Text("Logs"),
                 onTap: () => _onSelectPage(1),
+              ),
+            if (role == 'admin')
+              ListTile(
+                leading: const Icon(Icons.check_circle),
+                title: const Text("Review Reports"),
+                onTap: () => _onSelectPage(2),
               ),
           ],
         ),

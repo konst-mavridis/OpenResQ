@@ -19,8 +19,11 @@ from app.routers.user_routes import router as user_router
 from app.routers.reports import router as reports_router
 from app.routers.alerts import router as alerts_router
 from app.routers import admin
+from app.routers import admin_reports
 from app.utils.ws_manager import ws_manager
 from app.utils.logger import get_logger
+from app.routers import votes
+
 
 # Initialize logger
 logger = get_logger(__name__)
@@ -126,6 +129,8 @@ app.include_router(user_router)
 app.include_router(reports_router)
 app.include_router(alerts_router)
 app.include_router(admin.router)
+app.include_router(votes.router)
+app.include_router(admin_reports.router)
 
 # ===== WebSocket Endpoint =====
 

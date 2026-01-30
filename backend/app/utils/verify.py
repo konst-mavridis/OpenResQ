@@ -63,6 +63,9 @@ def verify_token(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
             user_data = user_doc.to_dict()
             role = user_data.get("role", "citizen")
             area = user_data.get("area", {})
+            if "trust_score" not in user_data:
+                # Default trust score
+                user_data["trust_score"] = 0.5
         else:
             # Create default user profile if doesn't exist
             role = "citizen"
@@ -77,6 +80,7 @@ def verify_token(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
                 "display_name": decoded.get("name", "Anonymous"),
                 "role": role,
                 "area": area,
+                "trust_score": 0.5,
                 "created_at": datetime.utcnow()
             }
             db.collection("users").document(uid).set(default_profile)

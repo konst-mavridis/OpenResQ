@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../services/api_service.dart';
+import '../services/storage_service.dart';
 
 class ReportForm extends StatefulWidget {
   const ReportForm({super.key});
@@ -22,6 +23,8 @@ class _ReportFormState extends State<ReportForm> {
   bool submitting = false;
   List<File> selectedImages = [];
   bool loadingLocation = false;
+  String statusText = '';
+
 
   @override
   void dispose() {
@@ -77,44 +80,52 @@ class _ReportFormState extends State<ReportForm> {
   }
 
   Future<void> _submit() async {
-    final title = titleController.text.trim();
-    final description = descController.text.trim();
-    final latText = latController.text.trim();
-    final lngText = lngController.text.trim();
-    double parseDoubleOr(double? v, double fallback) {
-      if (v == null) return fallback;
-      return double.tryParse(v.toString()) ?? fallback;
-    }
-
-    final latitude = parseDoubleOr(latText.isNotEmpty ? double.tryParse(latText) : null, 0.0);
-    final longitude = parseDoubleOr(lngText.isNotEmpty ? double.tryParse(lngText) : null, 0.0);
-    final mediaList = <String>[];
-    if (title.isEmpty || description.isEmpty) {
+    if (titleController.text.isEmpty || descController.text.isEmpty) {
       Fluttertoast.showToast(msg: 'Please enter title and description');
       return;
     }
 
     setState(() => submitting = true);
+
     try {
+      // 🔹 Stage 1: Upload images
+      setState(() => statusText = 'Uploading images...');
+      List<Map<String, dynamic>> mediaList = [];
+      for (var file in selectedImages) {
+        final url = await uploadImageToFirebase(file); // η λειτουργική σου
+        mediaList.add({"url": url, "type": "image"});
+      }
+
+      // 🔹 Stage 2: AI Analysis
+      setState(() => statusText = 'Analyzing by AI...');
+      // Προαιρετικά: μπορείς να κάνεις call στο backend που τρέχει AI
       final payload = {
-        'title': title,
-        'description': description,
+        'title': titleController.text.trim(),
+        'description': descController.text.trim(),
         'event_type': eventType,
         'severity': severity,
-        'latitude': latitude,
-        'longitude': longitude,
-        'location': {'lat': latitude, 'lng': longitude},
+        'latitude': double.tryParse(latController.text) ?? 0.0,
+        'longitude': double.tryParse(lngController.text) ?? 0.0,
         'media': mediaList,
       };
+
+      setState(() => statusText = 'Submitting report...');
       await api.createReport(payload);
+
       Fluttertoast.showToast(msg: 'Report submitted!');
       if (context.mounted) Navigator.pop(context, true);
     } catch (e) {
       Fluttertoast.showToast(msg: 'Failed to submit report: $e');
     } finally {
-      if (mounted) setState(() => submitting = false);
+      if (mounted) {
+        setState(() {
+        submitting = false;
+        statusText = '';
+      });
+      }
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -158,7 +169,7 @@ class _ReportFormState extends State<ReportForm> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: severity,
+                    initialValue: severity,
                     items: const [
                       DropdownMenuItem(value: 'low', child: Text('Low')),
                       DropdownMenuItem(value: 'medium', child: Text('Medium')),
@@ -257,6 +268,11 @@ class _ReportFormState extends State<ReportForm> {
                 child: submitting ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Submit'),
               ),
             ),
+            if (submitting)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(statusText, style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
           ],
         ),
       ),

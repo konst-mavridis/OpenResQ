@@ -14,7 +14,10 @@ class CreateReport(BaseModel):
     latitude: float = Field(..., ge=-90, le=90)
     longitude: float = Field(..., ge=-180, le=180)
     media: Optional[List[dict]] = Field(default_factory=list)
+    has_media: bool = False
     deleted: bool = False
+    ai_score: Optional[float] = Field(None, ge=0.0, le=1.0)
+    ai_fire_detected: Optional[bool] = None
     class Config:
         example = {
             "title": "Fire in building",

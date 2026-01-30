@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 
 class ApiService {
-    final String baseUrl = "https://openresq.onrender.com";
+    final String baseUrl = "http://10.0.2.2:8000";
 
     Future<String> _getToken() async {
       final user = FirebaseAuth.instance.currentUser;
@@ -238,6 +238,61 @@ class ApiService {
         throw Exception(res.body);
       }
     }
+    
 
+    Future<void> vote(String reportId, int vote) async {
+      final headers = await _authHeaders();
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+
+      if (uid == null) throw Exception("User not logged in");
+
+      final res = await http.post(
+        Uri.parse('$baseUrl/votes/$reportId'),
+        headers: headers,
+        body: jsonEncode({
+          'voter_id': uid, // μοναδικό ID για one-vote
+          'vote': vote,
+        }),
+      );
+
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        throw Exception(res.body);
+      }
+
+      final data = jsonDecode(res.body);
+
+    }
+
+    Future<List<dynamic>> getReportsForReview() async {
+      final headers = await _authHeaders();
+
+      final res = await http.get(
+        Uri.parse('$baseUrl/adminr/reports/for-review'),
+        headers: headers,
+      );
+
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        throw Exception(res.body);
+      }
+
+      return jsonDecode(res.body);
+    }
+
+
+    Future<void> decision(String reportId, String decision) async {
+      final headers = await _authHeaders();
+
+      final uri = Uri.parse(
+        '$baseUrl/adminr/reports/$reportId/decision'
+      ).replace(queryParameters: {
+        "decision": decision   // "approved" ή "rejected"
+      });
+
+      final res = await http.post(uri, headers: headers);
+
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        throw Exception(res.body);
+      }
+    }
 
 }

@@ -13,3 +13,4 @@ def is_within_radius(center_lat, center_lng, lat, lng, radius_km):
     if center_lat is None or center_lng is None or radius_km is None:
         return True
     return haversine_distance_km(center_lat, center_lng, lat, lng) <= radius_km
+

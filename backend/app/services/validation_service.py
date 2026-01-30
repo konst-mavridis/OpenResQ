@@ -192,3 +192,102 @@ class InputValidator:
             raise ValidationError("Note cannot be empty")
         
         return True
+
+
+def calculate_confidence(
+    report: dict,
+    nearby_reports: int = 0,
+    user_trust: float = 0.5,
+    community_confirms: int = 0,
+    ai_fire_score: Optional[float] = 0.0
+) -> float:
+
+    confidence = 0.0
+
+    # 1) User trust (βασικός παράγοντας)
+    confidence += user_trust * 0.35   # 35%
+
+    # 2) AI vision
+    confidence += ai_fire_score * 0.30  # 30%
+
+    # 3) Nearby reports
+    if nearby_reports >= 3:
+        confidence += 0.25
+    elif nearby_reports == 2:
+        confidence += 0.15
+    elif nearby_reports == 1:
+        confidence += 0.05
+
+    # 4) Media bonus
+    if report.get("media"):
+        confidence += 0.10
+
+    # Clamp
+    confidence = max(0.0, min(1.0, confidence))
+
+    return confidence
+
+class InputValidator:
+    MAX_TITLE_LENGTH = 200
+    MAX_DESCRIPTION_LENGTH = 5000
+    MAX_MESSAGE_LENGTH = 1000
+    MAX_DISPLAY_NAME_LENGTH = 100
+
+    VALID_EVENT_TYPES = [
+        "fire", "medical", "accident", "crime", "flood",
+        "earthquake", "chemical", "hazmat", "other"
+    ]
+
+    VALID_SEVERITIES = ["low", "medium", "high", "critical"]
+
+    @staticmethod
+    def validate_report(
+        title: str,
+        description: str,
+        event_type: str,
+        severity: str,
+        latitude: float,
+        longitude: float
+    ) -> bool:
+
+        # ---- TITLE ----
+        if not title or not isinstance(title, str):
+            raise ValidationError("Title is required and must be text")
+
+        if len(title.strip()) == 0:
+            raise ValidationError("Title cannot be empty")
+
+        if len(title) > InputValidator.MAX_TITLE_LENGTH:
+            raise ValidationError(
+                f"Title cannot exceed {InputValidator.MAX_TITLE_LENGTH} characters"
+            )
+
+        # ---- DESCRIPTION ----
+        if description and len(description) > InputValidator.MAX_DESCRIPTION_LENGTH:
+            raise ValidationError(
+                f"Description cannot exceed {InputValidator.MAX_DESCRIPTION_LENGTH} characters"
+            )
+
+        # ---- EVENT TYPE ----
+        if event_type not in InputValidator.VALID_EVENT_TYPES:
+            raise ValidationError(
+                f"Invalid event type. Must be one of: {InputValidator.VALID_EVENT_TYPES}"
+            )
+
+        # ---- SEVERITY ----
+        if severity not in InputValidator.VALID_SEVERITIES:
+            raise ValidationError(
+                f"Invalid severity. Must be one of: {InputValidator.VALID_SEVERITIES}"
+            )
+
+        # ---- COORDINATES ----
+        if not isinstance(latitude, (int, float)) or not isinstance(longitude, (int, float)):
+            raise ValidationError("Latitude and longitude must be numbers")
+
+        if latitude < -90 or latitude > 90:
+            raise ValidationError("Latitude must be between -90 and 90")
+
+        if longitude < -180 or longitude > 180:
+            raise ValidationError("Longitude must be between -180 and 180")
+
+        return True

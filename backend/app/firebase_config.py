@@ -32,7 +32,7 @@ def initialize_firebase():
         
         # Initialize Firebase app
         firebase_admin.initialize_app(cred, {
-            'storageBucket': settings.firebase_storage_bucket
+            'storageBucket': "openresq-b4c5f.firebasestorage.app"
         })
         
         # Initialize services

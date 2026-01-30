@@ -70,6 +70,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 20),
               ElevatedButton(
+                onPressed: loading ? null : _onLogin,
                 child: loading
                     ? const SizedBox(
                         width: 18,
@@ -77,7 +78,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Text("Login"),
-                onPressed: loading ? null : _onLogin,
               ),
               TextButton(
                 child: const Text("Create an account"),
