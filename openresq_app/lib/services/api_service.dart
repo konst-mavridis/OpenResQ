@@ -1,9 +1,10 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:uuid/uuid.dart';
 
 class ApiService {
-    final String baseUrl = "https://openresq.onrender.com";
+    final String baseUrl = "http://10.0.2.2:8000";
 
     Future<String> _getToken() async {
       final user = FirebaseAuth.instance.currentUser;
@@ -240,27 +241,35 @@ class ApiService {
     }
     
 
-    Future<void> vote(String reportId, int vote) async {
+    Future<Map<String, dynamic>> vote(
+      String reportId,
+      int vote,
+      {double? userLat, double? userLng}
+    ) async {
       final headers = await _authHeaders();
-      final uid = FirebaseAuth.instance.currentUser?.uid;
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+      final deviceFp = const Uuid().v4();
 
-      if (uid == null) throw Exception("User not logged in");
+      final uri = Uri.parse('$baseUrl/votes/$reportId').replace(
+        queryParameters: {
+          'voter_id': uid,
+          'vote': vote.toString(),
+          'device_fp': deviceFp,
+          if (userLat != null) 'lat': userLat.toString(),
+          if (userLng != null) 'lng': userLng.toString(),
+        },
+      );
 
       final res = await http.post(
-        Uri.parse('$baseUrl/votes/$reportId'),
+        uri,
         headers: headers,
-        body: jsonEncode({
-          'voter_id': uid, // μοναδικό ID για one-vote
-          'vote': vote,
-        }),
       );
 
       if (res.statusCode < 200 || res.statusCode >= 300) {
         throw Exception(res.body);
       }
 
-      final data = jsonDecode(res.body);
-
+      return jsonDecode(res.body);
     }
 
     Future<List<dynamic>> getReportsForReview() async {

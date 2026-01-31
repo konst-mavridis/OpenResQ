@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import './chat_screen.dart';
-
+import 'package:geolocator/geolocator.dart';
 class ReportDetail extends StatefulWidget {
   final String reportId;
   final String role;
@@ -28,6 +28,7 @@ class _ReportDetailState extends State<ReportDetail> {
 
   int upvotes = 0;
   int downvotes = 0;
+  bool hasVoted = false;
 
   bool get isCitizenOwner => isOwner && widget.role == 'citizen';
   bool get isStaff => widget.role == 'responder' || widget.role == 'admin';
@@ -49,6 +50,7 @@ class _ReportDetailState extends State<ReportDetail> {
         isOwner = uid != null && r['uid'] == uid;
         upvotes = r['votes_up'] ?? 0;
         downvotes = r['votes_down'] ?? 0;
+        hasVoted = r['user_vote'] != null;
       });
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -58,19 +60,76 @@ class _ReportDetailState extends State<ReportDetail> {
     }
   }
 
-  Future<void> _vote(int vote) async {
-    try {
-      await api.vote(widget.reportId, vote);
-      setState(() {
-        if (vote > 0) upvotes += 1;
-        if (vote < 0) downvotes += 1;
-      });
+  Future<void> _vote(int value) async {
+    if (hasVoted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(vote > 0 ? 'Voted YES' : 'Voted NO')),
+        const SnackBar(
+          content: Text("You have already voted on this report 🗳️"),
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Get user location
+      final permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        final req = await Geolocator.requestPermission();
+        if (req == LocationPermission.denied ||
+            req == LocationPermission.deniedForever) {
+          throw Exception("Location permission denied");
+        }
+      }
+
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      // Check if within 500m
+      final double reportLat = (report!['latitude'] ?? report!['lat'] ?? 0.0) as double;
+      final double reportLng = (report!['longitude'] ?? report!['lng'] ?? 0.0) as double;
+
+      final distance = Geolocator.distanceBetween(
+        pos.latitude,
+        pos.longitude,
+        reportLat,
+        reportLng,
+      );
+
+      if (distance > 300) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("You must be within 300m of the incident to vote 📍"),
+            duration: Duration(seconds: 3),
+          ),
+        );
+        return;
+      }
+
+      // Submit vote with location
+      final data = await api.vote(
+        widget.reportId,
+        value,
+        userLat: pos.latitude,
+        userLng: pos.longitude,
+      );
+
+      setState(() {
+        upvotes = data['upvotes'];
+        downvotes = data['downvotes'];
+        report!['confidence'] = data['confidence'];
+        hasVoted = true;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(value == 1 ? "Upvoted 👍" : "Downvoted 👎"),
+        ),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error voting: $e')),
+        SnackBar(content: Text(e.toString())),
       );
     }
   }
@@ -159,9 +218,10 @@ class _ReportDetailState extends State<ReportDetail> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _infoCard(Icons.fireplace, 'Type', report!['event_type']),
-                    _infoCard(Icons.warning_amber_rounded, 'Severity', report!['severity']),
+                    _infoCard(Icons.fireplace, 'Type', report!['event_type'] ?? 'N/A'),
+                    _infoCard(Icons.warning_amber_rounded, 'Severity', report!['severity'] ?? 'N/A'),
                     _infoCard(Icons.flash_on, 'AI Score', (report!['ai_score'] ?? 'N/A').toString()),
+                    _infoCard(Icons.psychology, 'Confidence', '${(((report!['confidence'] as num?) ?? 0.0) * 100).toStringAsFixed(1)}%'),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -208,16 +268,44 @@ class _ReportDetailState extends State<ReportDetail> {
                     padding: const EdgeInsets.all(12),
                     child: Column(
                       children: [
-                        const Text("Does this report reflect reality?", style: TextStyle(fontWeight: FontWeight.bold)),
+                        const Text(
+                          "Does this report reflect reality?",
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
                         const SizedBox(height: 8),
+
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            Icon(Icons.location_on, size: 16),
+                            SizedBox(width: 4),
+                            Text("500m radius required"),
+                          ],
+                        ),
+
+
+                        // 👇 ΜΗΝΥΜΑ ΑΝ ΕΧΕΙ ΨΗΦΙΣΕΙ
+                        if (hasVoted)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Chip(
+                              avatar: const Icon(Icons.check_circle, color: Colors.green),
+                              label: const Text("You have already voted"),
+                              backgroundColor: theme.colorScheme.primaryContainer,
+                            ),
+                          ),
+
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Column(
                               children: [
                                 IconButton(
-                                  icon: const Icon(Icons.thumb_up, color: Colors.green),
-                                  onPressed: () => _vote(1),
+                                  icon: Icon(
+                                    Icons.thumb_up,
+                                    color: hasVoted ? Colors.grey : Colors.green,
+                                  ),
+                                  onPressed: hasVoted ? null : () => _vote(1),
                                 ),
                                 Text(upvotes.toString()),
                               ],
@@ -226,18 +314,34 @@ class _ReportDetailState extends State<ReportDetail> {
                             Column(
                               children: [
                                 IconButton(
-                                  icon: const Icon(Icons.thumb_down, color: Colors.red),
-                                  onPressed: () => _vote(-1),
+                                  icon: Icon(
+                                    Icons.thumb_down,
+                                    color: hasVoted ? Colors.grey : Colors.red,
+                                  ),
+                                  onPressed: hasVoted ? null : () => _vote(-1),
                                 ),
                                 Text(downvotes.toString()),
                               ],
                             ),
                           ],
                         ),
+
+                        // 👇 ΤΙ ΨΗΦΙΣΕ
+                        if (hasVoted && report!['user_vote'] != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(
+                              report!['user_vote'] == 1
+                                  ? "You voted: 👍 Yes"
+                                  : "You voted: 👎 No",
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ),
                       ],
                     ),
                   ),
                 ),
+
                 const SizedBox(height: 12),
 
                 // STAFF ACTIONS
