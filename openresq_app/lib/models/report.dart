@@ -36,7 +36,7 @@ class Report {
       longitude: data["longitude"] ?? longitude,
       media: data["media"] ?? media,
       eventType: data["event_type"] ?? eventType,
-      assignedTo: data["assigned_to"] ?? assignedTo,
+      assignedTo: data["assignedTo"]?.toString(),
       assignedAt: data["assigned_at"] != null
           ? DateTime.tryParse(data["assigned_at"])
           : null,

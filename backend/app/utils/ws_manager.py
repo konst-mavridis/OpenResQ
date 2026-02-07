@@ -239,6 +239,22 @@ class ConnectionManager:
     def get_connection_count(self) -> int:
         """Get total number of connected clients."""
         return len(self.active_connections)
+    
+    def broadcast_sync(self, message: dict, filter_by_role: Optional[str] = None):
+        """
+        Fire-and-forget wrapper to call async broadcast() from sync code.
+        Safe to use from Firestore listeners, background tasks, etc.
+        """
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        if loop.is_running():
+            loop.create_task(self.broadcast(message, filter_by_role=filter_by_role))
+        else:
+            loop.run_until_complete(self.broadcast(message, filter_by_role=filter_by_role))
 
 
 ws_manager = ConnectionManager()

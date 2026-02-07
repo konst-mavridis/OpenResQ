@@ -2,6 +2,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart';
 
 final flutterTts = FlutterTts();
 
@@ -40,7 +41,7 @@ Future<void> speak(String text) async {
       await flutterTts.speak(text);
     } catch (e) {
       // Fail silently if all TTS methods fail
-      print('TTS failed: $e');
+      debugPrint('TTS failed: $e');
     }
   }
 }

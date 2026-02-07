@@ -44,6 +44,7 @@ class _ReportDetailState extends State<ReportDetail> {
       final r = await api.getReport(widget.reportId);
       final uid = FirebaseAuth.instance.currentUser?.uid;
 
+      if (!mounted) return;
       setState(() {
         report = r;
         _descCtrl.text = r['description'] ?? '';
@@ -53,6 +54,7 @@ class _ReportDetailState extends State<ReportDetail> {
         hasVoted = r['user_vote'] != null;
       });
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Το report έχει διαγραφεί")),
       );
@@ -86,6 +88,8 @@ class _ReportDetailState extends State<ReportDetail> {
         desiredAccuracy: LocationAccuracy.high,
       );
 
+      if (!mounted) return;
+
       // Check if within 500m
       final double reportLat = (report!['latitude'] ?? report!['lat'] ?? 0.0) as double;
       final double reportLng = (report!['longitude'] ?? report!['lng'] ?? 0.0) as double;
@@ -115,6 +119,7 @@ class _ReportDetailState extends State<ReportDetail> {
         userLng: pos.longitude,
       );
 
+      if (!mounted) return;
       setState(() {
         upvotes = data['upvotes'];
         downvotes = data['downvotes'];
@@ -128,6 +133,7 @@ class _ReportDetailState extends State<ReportDetail> {
         ),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString())),
       );
@@ -141,9 +147,11 @@ class _ReportDetailState extends State<ReportDetail> {
     if (_noteCtrl.text.trim().isNotEmpty) patch['responder_note'] = _noteCtrl.text.trim();
     try {
       await api.responderUpdate(widget.reportId, patch);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Updated')));
       await _load();
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
@@ -153,9 +161,11 @@ class _ReportDetailState extends State<ReportDetail> {
   Future<void> adminDelete() async {
     try {
       await api.deleteReport(widget.reportId, reason: "Deleted by admin", hard: true, confirm: true);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Report deleted')));
       Navigator.pop(context);
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
@@ -163,9 +173,11 @@ class _ReportDetailState extends State<ReportDetail> {
   Future<void> deleteOwnReport() async {
     try {
       await api.deleteReport(widget.reportId, reason: "Deleted by owner", hard: true, confirm: true);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Your report has been deleted')));
       Navigator.pop(context);
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
@@ -408,6 +420,7 @@ class _ReportDetailState extends State<ReportDetail> {
                                 "event_type": report!['event_type'],
                                 "severity": report!['severity'],
                               });
+                              if (!mounted) return;
                               await _load();
                             },
                             icon: const Icon(Icons.save),
@@ -463,7 +476,7 @@ class _ReportDetailState extends State<ReportDetail> {
     return Expanded(
       child: Card(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        color: Theme.of(context).colorScheme.surfaceVariant,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Column(

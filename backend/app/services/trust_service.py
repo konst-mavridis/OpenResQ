@@ -72,3 +72,4 @@ class TrustService:
         if trust < 0.1:
             return False
         return True
+

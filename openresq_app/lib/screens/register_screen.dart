@@ -43,9 +43,10 @@ class RegisterScreen extends StatelessWidget {
                     passController.text.trim(),
                   );
 
+                  if (!context.mounted) return;
                   Navigator.pushReplacement(
                     context,
-                    MaterialPageRoute(builder: (_) => HomeScreen()),
+                    MaterialPageRoute(builder: (_) => const HomeRouter()),
                   );
                 } catch (e) {
                   Fluttertoast.showToast(msg: e.toString());

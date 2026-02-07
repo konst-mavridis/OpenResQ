@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'screens/login_screen.dart';
@@ -19,13 +20,13 @@ void main() async {
   );
   String? token = await messaging.getToken();
   if (token != null) {
-    print("Firebase Messaging Token: $token");
+    debugPrint("Firebase Messaging Token: $token");
     await api.sendPushToken(token);
   }
   FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-    print("FCM Message Received: ${message.messageId}");
+    debugPrint("FCM Message Received: ${message.messageId}");
     if (message.notification != null) {
-      print('Message notification: ${message.notification}');
+      debugPrint('Message notification: ${message.notification}');
     }
   });
   runApp(const OpenResQApp());

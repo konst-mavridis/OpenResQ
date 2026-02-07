@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -8,6 +10,7 @@ import '../models/report.dart';
 import '../services/tts_service.dart';
 import '../services/api_service.dart';
 import '../screens/home_screen.dart';
+
 class NavigationScreen extends StatefulWidget {
   final Report report;
   const NavigationScreen({super.key, required this.report});
@@ -29,10 +32,6 @@ class _NavigationScreenState extends State<NavigationScreen> {
   bool _isNavigating = true;
   bool _hasArrived = false;
 
-  void _onMapCreated(GoogleMapController controller) {
-    _mapController = controller;
-  }
-
   String eta = "--";
   String distance = "--";
   String speed = "0 km/h";
@@ -42,9 +41,12 @@ class _NavigationScreenState extends State<NavigationScreen> {
   String instruction = "Starting navigation";
   double nextTurnDistance = 0;
   int _lastSpokenMeter = 9999;
-
   List<LatLng> _routePoints = [];
   int _currentRouteIndex = 0;
+
+  void _onMapCreated(GoogleMapController controller) {
+    _mapController = controller;
+  }
 
   @override
   void initState() {
@@ -59,124 +61,144 @@ class _NavigationScreenState extends State<NavigationScreen> {
       );
 
       _currentPos = LatLng(pos.latitude, pos.longitude);
+
       await _drawRoute();
       _startTracking();
+
+      if (!mounted) return;
       setState(() {});
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error getting location: $e')),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Location error: $e')));
     }
   }
 
-  /// 🔵 DRAW ROUTE
+  /// ✅ ROUTE + ETA + INITIAL NAV STATE
   Future<void> _drawRoute() async {
-    try {
-      if (_currentPos == null) return;
-      
-      final polylinePoints = PolylinePoints();
+    if (_currentPos == null) return;
 
-      final result = await polylinePoints.getRouteBetweenCoordinates(
-        request: PolylineRequest(
-          origin: PointLatLng(
-            _currentPos!.latitude,
-            _currentPos!.longitude,
-          ),
-          destination: PointLatLng(
-            widget.report.latitude,
-            widget.report.longitude,
-          ),
-          mode: TravelMode.driving,
-        ),
-        googleApiKey: "AIzaSyBHq6f_CM3XSUOFxIzJNbH4V5u_xgJxrBs",
-      );
+    final origin =
+        "${_currentPos!.latitude},${_currentPos!.longitude}";
+    final destination =
+        "${widget.report.latitude},${widget.report.longitude}";
 
-      if (result.points.isNotEmpty) {
-        final route = result.points
-            .map((p) => LatLng(p.latitude, p.longitude))
-            .toList();
-        
-        _routePoints = route;
+    final url =
+        "https://maps.googleapis.com/maps/api/directions/json?"
+        "origin=$origin&destination=$destination&mode=driving&key=AIzaSyBHq6f_CM3XSUOFxIzJNbH4V5u_xgJxrBs";
 
-        if (mounted) {
-          setState(() {
-            _polylines
-              ..clear()
-              ..add(
-                Polyline(
-                  polylineId: const PolylineId("route"),
-                  points: route,
-                  width: 8,
-                  color: Colors.blue,
-                ),
-              );
-          });
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error drawing route: $e')),
-        );
-      }
-    }
-  }
+    final response = await http.get(Uri.parse(url));
+    final data = jsonDecode(response.body);
 
-  void _updateNavigation(Position pos) {
-    if (_routePoints.isEmpty || _currentRouteIndex >= _routePoints.length - 1) {
-      if (!_hasArrived) {
-        _hasArrived = true;
-        _speakText("You have arrived at your destination");
-      }
+    if (!mounted) return;
+
+    if (data["routes"].isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text("No route found")));
       return;
     }
+
+    final route = data["routes"][0];
+    final leg = route["legs"][0];
+
+    // ✅ ETA + DISTANCE from Google
+    setState(() {
+      distance = leg["distance"]["text"];
+      eta = leg["duration"]["text"];
+    });
+
+    final points = route["overview_polyline"]["points"];
+    final decoded = PolylinePoints().decodePolyline(points);
+
+    _routePoints =
+        decoded.map((p) => LatLng(p.latitude, p.longitude)).toList();
+
+    setState(() {
+      _polylines
+        ..clear()
+        ..add(Polyline(
+          polylineId: const PolylineId("route"),
+          points: _routePoints,
+          width: 8,
+        ));
+    });
+
+    // ✅ reset navigation
+    _currentRouteIndex = 0;
+    _hasArrived = false;
+    _lastSpokenMeter = 9999;
+
+    if (_routePoints.length > 1 && _currentPos != null) {
+      final first = _routePoints[1];
+
+      nextTurnDistance = Geolocator.distanceBetween(
+        _currentPos!.latitude,
+        _currentPos!.longitude,
+        first.latitude,
+        first.longitude,
+      );
+
+      instruction = "Continue straight";
+    }
+  }
+
+  /// ✅ NAVIGATION UPDATE
+  void _updateNavigation(Position pos) {
+    if (_routePoints.isEmpty ||
+        _currentRouteIndex >= _routePoints.length - 1) {
+      if (!_hasArrived) {
+        _hasArrived = true;
+        _speakText("You have arrived");
+      }
+
+
+      return;
+    }
+
+    if (_currentRouteIndex < 0) _currentRouteIndex = 0;
 
     final current = LatLng(pos.latitude, pos.longitude);
     final nextPoint = _routePoints[_currentRouteIndex + 1];
 
-    final distance = Geolocator.distanceBetween(
+    final dist = Geolocator.distanceBetween(
       current.latitude,
       current.longitude,
       nextPoint.latitude,
       nextPoint.longitude,
     );
 
-    nextTurnDistance = distance;
+    nextTurnDistance = dist;
 
-    if (distance < 5) {
+    if (dist < 15) {
       _currentRouteIndex++;
     }
 
-    final bearingDiff = (pos.heading -
-          Geolocator.bearingBetween(
-            current.latitude,
-            current.longitude,
-            nextPoint.latitude,
-            nextPoint.longitude,
-          )).abs();
-
-    if (bearingDiff > 30 && bearingDiff < 150) {
-      instruction = "Turn right ${(bearingDiff).round()} degrees";
-    } else if (bearingDiff >= 150) {
-      instruction = "Turn left ${(180 - bearingDiff).round()} degrees";
-    } else {
-      instruction = "Continue straight";
-    }
-
-    if (distance <= 50 && _lastSpokenMeter - distance > 50) {
+    if (dist <= 50 && _lastSpokenMeter - dist > 50) {
       _speakText("$instruction in 50 meters");
       _lastSpokenMeter = 50;
     }
 
-    if ((distance ~/ 5) != _lastSpokenMeter) {
-      _lastSpokenMeter = distance ~/ 5;
-      if (mounted) setState(() {});
+    final bearingDiff = (pos.heading -
+            Geolocator.bearingBetween(
+              current.latitude,
+              current.longitude,
+              nextPoint.latitude,
+              nextPoint.longitude,
+            ))
+        .abs();
+
+    if (bearingDiff > 30 && bearingDiff < 150) {
+      instruction = "Turn right";
+    } else if (bearingDiff >= 150) {
+      instruction = "Turn left";
+    } else {
+      instruction = "Continue straight";
     }
+
+    if (mounted) setState(() {});
   }
 
-  /// ⏱️ UPDATE ETA & DISTANCE
+  /// ✅ ETA + DISTANCE LIVE UPDATE
   void _updateEtaAndDistance(Position pos) {
     final meters = Geolocator.distanceBetween(
       pos.latitude,
@@ -187,30 +209,31 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
     _checkReRoute(meters);
 
-    final speed = pos.speed > 1 ? pos.speed : 13.8; // m/s (13.8 m/s = 50 km/h)
-    final seconds = meters / speed;
+    final spd = pos.speed > 1 ? pos.speed : 13.8;
+    final seconds = meters / spd;
     final speedKmh = (pos.speed * 3.6).toStringAsFixed(1);
 
     if (mounted) {
       setState(() {
         distance = "${(meters / 1000).toStringAsFixed(2)} km";
         eta = "${(seconds / 60).toStringAsFixed(0)} min";
-        this.speed = "$speedKmh km/h";
+        speed = "$speedKmh km/h";
       });
     }
 
-    // Speak updates every 200 meters
     if ((_lastDistance ?? 0) - meters > 200) {
-      _speakText("Estimated time of arrival is $eta");
+      _speakText("ETA $eta");
     }
 
     if (meters < 50 && !_hasArrived) {
-      _speakText("You have arrived at your destination");
+      _speakText("Arrived");
+      _hasArrived = true;
     }
   }
 
   void _checkReRoute(double currentDistance) {
-    if (_lastDistance != null && currentDistance > _lastDistance! + 30) {
+    if (_lastDistance != null &&
+        currentDistance > _lastDistance! + 30) {
       _drawRoute();
       _speakText("Recalculating route");
     }
@@ -218,15 +241,34 @@ class _NavigationScreenState extends State<NavigationScreen> {
   }
 
   void _speakText(String text) {
-    if (_isSpeakingEnabled) {
-      speak(text).catchError((e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('TTS Error: $e')),
-          );
-        }
-      });
-    }
+    if (_isSpeakingEnabled) speak(text);
+  }
+
+  void _startTracking() {
+    if (!_isNavigating) return;
+
+    _positionStream = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.bestForNavigation,
+        distanceFilter: 5,
+      ),
+    ).listen((pos) {
+      _currentPos = LatLng(pos.latitude, pos.longitude);
+
+      _updateEtaAndDistance(pos);
+      _updateNavigation(pos);
+
+      _mapController?.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(
+            target: _currentPos!,
+            zoom: 19,
+            tilt: 70,
+            bearing: pos.heading,
+          ),
+        ),
+      );
+    });
   }
 
   Future<void> _exitNavigation() async {
@@ -248,7 +290,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
               Navigator.pop(dialogContext);
               if (mounted) {
                 Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const HomeScreen()),
+                  MaterialPageRoute(builder: (_) => const HomeRouter()),
                   (route) => false,
                 );
               }
@@ -259,7 +301,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
             onPressed: () async {
               Navigator.pop(dialogContext);
               try {
-                await api.responderUpdate(widget.report.id, {'status': 'pending'});
+                await api.unassignReport(widget.report.id);
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Report de-assigned')),
@@ -274,7 +316,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
               }
               if (mounted) {
                 Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const HomeScreen()),
+                  MaterialPageRoute(builder: (_) => const HomeRouter()),
                   (route) => false,
                 );
               }
@@ -284,41 +326,11 @@ class _NavigationScreenState extends State<NavigationScreen> {
         ],
       ),
     );
-  }
+  } 
 
-  /// 🚗 LIVE NAVIGATION
-  void _startTracking() {
-    if (!_isNavigating) return;
-    
-    _positionStream = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.bestForNavigation,
-        distanceFilter: 5,
-      ),
-    ).listen((pos) {
-      _currentPos = LatLng(pos.latitude, pos.longitude);
-
-      _updateEtaAndDistance(pos);
-      _updateNavigation(pos);
-
-      if (mounted) {
-        _mapController?.animateCamera(
-          CameraUpdate.newCameraPosition(
-            CameraPosition(
-              target: _currentPos!,
-              zoom: 19,
-              tilt: 70,
-              bearing: pos.heading,
-            ),
-          ),
-        );
-      }
-    });
-  }
 
   @override
   void dispose() {
-    _isNavigating = false;
     _positionStream?.cancel();
     tts.stop();
     super.dispose();
@@ -332,15 +344,16 @@ class _NavigationScreenState extends State<NavigationScreen> {
       );
     }
 
-    return WillPopScope(
-      onWillPop: () async {
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {
+        if (didPop) return;
         _exitNavigation();
-        return false;
       },
       child: Scaffold(
         body: Stack(
           children: [
-            /// 🗺 MAP
+            /// ?? MAP
             GoogleMap(
               initialCameraPosition: CameraPosition(
                 target: _currentPos!,
@@ -351,10 +364,9 @@ class _NavigationScreenState extends State<NavigationScreen> {
               myLocationEnabled: true,
               myLocationButtonEnabled: false,
               polylines: _polylines,
-              markers: const {},
             ),
 
-            /// 🔴 EXIT BUTTON - TOP LEFT
+            /// ?? EXIT BUTTON (top-left)
             Positioned(
               top: 40,
               left: 16,
@@ -362,6 +374,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
                 elevation: 8,
                 borderRadius: BorderRadius.circular(12),
                 child: FloatingActionButton(
+                  heroTag: "exit_nav",
                   onPressed: _exitNavigation,
                   backgroundColor: Colors.red,
                   mini: true,
@@ -370,7 +383,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
               ),
             ),
 
-            /// 🔊 VOICE TOGGLE - TOP RIGHT
+            /// ?? VOICE TOGGLE (top-right)
             Positioned(
               top: 40,
               right: 16,
@@ -378,18 +391,24 @@ class _NavigationScreenState extends State<NavigationScreen> {
                 elevation: 8,
                 borderRadius: BorderRadius.circular(12),
                 child: FloatingActionButton(
+                  heroTag: "voice_nav",
                   onPressed: () {
                     setState(() => _isSpeakingEnabled = !_isSpeakingEnabled);
-                    _speakText(_isSpeakingEnabled ? "Voice enabled" : "Voice disabled");
+                    _speakText(
+                      _isSpeakingEnabled ? "Voice enabled" : "Voice disabled",
+                    );
                   },
-                  backgroundColor: _isSpeakingEnabled ? Colors.blue : Colors.grey,
+                  backgroundColor:
+                      _isSpeakingEnabled ? Colors.blue : Colors.grey,
                   mini: true,
-                  child: Icon(_isSpeakingEnabled ? Icons.volume_up : Icons.volume_off),
+                  child: Icon(
+                    _isSpeakingEnabled ? Icons.volume_up : Icons.volume_off,
+                  ),
                 ),
               ),
             ),
 
-            /// 🔼 TOP POPUP – TURN INSTRUCTION
+            /// ?? TURN INSTRUCTION CARD (top center)
             Positioned(
               top: 110,
               left: 16,
@@ -419,7 +438,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
                               ),
                             ),
                             Text(
-                              "Σε ${nextTurnDistance.toStringAsFixed(0)} μ",
+                              "Σε ${nextTurnDistance.toStringAsFixed(0)} μέτρα",
                               style: const TextStyle(fontSize: 14),
                             ),
                           ],
@@ -431,7 +450,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
               ),
             ),
 
-            /// 🔽 BOTTOM POPUP – ETA & DISTANCE & SPEED
+            /// ?? BOTTOM ETA / DISTANCE / SPEED CARD
             Positioned(
               bottom: 24,
               left: 16,
@@ -472,6 +491,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
                         ],
                       ),
                       const SizedBox(height: 12),
+
+                      /// ? ARRIVAL BANNER
                       if (_hasArrived)
                         Container(
                           padding: const EdgeInsets.all(8),
@@ -499,14 +520,13 @@ class _NavigationScreenState extends State<NavigationScreen> {
                 ),
               ),
             ),
-          
           ],
         ),
       ),
     );
   }
-}
 
+}
 
 
 class _InfoTile extends StatelessWidget {
@@ -522,29 +542,22 @@ class _InfoTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Row(
-        children: [
-          Icon(icon, color: Colors.blue),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-              Text(
-                value,
+    return Row(
+      children: [
+        Icon(icon),
+        const SizedBox(width: 6),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label,
+                style:
+                    const TextStyle(fontSize: 12, color: Colors.grey)),
+            Text(value,
                 style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+                    fontWeight: FontWeight.bold)),
+          ],
+        ),
+      ],
     );
   }
 }

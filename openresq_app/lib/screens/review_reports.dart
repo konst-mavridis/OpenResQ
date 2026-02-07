@@ -22,11 +22,13 @@ class _ReviewReportsPageState extends State<ReviewReportsPage> {
   Future<void> _loadReports() async {
     try {
       final r = await api.getReportsForReview();
+      if (!mounted) return;
       setState(() {
         reports = List<Map<String, dynamic>>.from(r);
         loading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => loading = false);
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text("Error loading reports: $e")));

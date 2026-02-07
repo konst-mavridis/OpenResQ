@@ -1,6 +1,7 @@
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
 import 'package:uuid/uuid.dart';
+import 'package:flutter/foundation.dart';
 
 final FirebaseStorage storage = FirebaseStorage.instance;
 
@@ -18,17 +19,17 @@ Future<String> uploadImageToFirebase(File file) async {
     // Προαιρετικά: μπορείς να παρακολουθείς την πρόοδο
     uploadTask.snapshotEvents.listen((event) {
       final progress = (event.bytesTransferred / event.totalBytes) * 100;
-      print('Upload is ${progress.toStringAsFixed(2)}% done');
+      debugPrint('Upload is ${progress.toStringAsFixed(2)}% done');
     });
 
     final snapshot = await uploadTask;
     
     // Παίρνουμε το URL της εικόνας
     final downloadUrl = await snapshot.ref.getDownloadURL();
-    print('[DEBUG] Uploaded image URL: $downloadUrl');
+    debugPrint('[DEBUG] Uploaded image URL: $downloadUrl');
     return downloadUrl;
   } catch (e) {
-    print('[ERROR] Failed to upload image: $e');
+    debugPrint('[ERROR] Failed to upload image: $e');
     rethrow;
   }
 }

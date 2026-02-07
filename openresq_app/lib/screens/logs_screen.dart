@@ -22,11 +22,13 @@ class _LogsPageState extends State<LogsPage> {
   Future<void> _loadLogs() async {
     try {
       final l = await api.getLogs();
+      if (!mounted) return;
       setState(() {
         logs = List<Map<String, dynamic>>.from(l);
         loading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => loading = false);
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text("Error loading logs: $e")));

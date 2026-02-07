@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPException
+from fastapi_utils.tasks import repeat_every
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -18,12 +19,15 @@ from app.routers.auth_routes import router as auth_router
 from app.routers.user_routes import router as user_router
 from app.routers.reports import router as reports_router
 from app.routers.alerts import router as alerts_router
-from app.routers import admin
+from app.routers import admin, responders
 from app.routers import admin_reports
 from app.utils.ws_manager import ws_manager
 from app.utils.logger import get_logger
 from app.routers import votes
-
+from app.routers import admin_analytics, admin_responders
+from app.services.live_responders_service import start_responder_listener
+from app.services.duty_monitor_service import check_responder_activity
+from app.routers.responders import router as responders_router
 
 # Initialize logger
 logger = get_logger(__name__)
@@ -40,11 +44,17 @@ app = FastAPI(
 )
 
 @app.on_event("startup")
+@repeat_every(seconds=300) # every 5 minutes 
+def monitor_responder_activity(): 
+    check_responder_activity()
+
+@app.on_event("startup")
 async def startup_event():
     logger.info("Starting OpenResQ backend")
     try:
         initialize_firebase()
         logger.info("Firebase initialized successfully")
+        start_responder_listener()
     except Exception as e:
         logger.error(f"Failed to initialize Firebase: {e}")
         raise
@@ -131,6 +141,9 @@ app.include_router(alerts_router)
 app.include_router(admin.router)
 app.include_router(votes.router)
 app.include_router(admin_reports.router)
+app.include_router(admin_analytics.router)
+app.include_router(admin_responders.router)
+app.include_router(responders_router)
 
 # ===== WebSocket Endpoint =====
 

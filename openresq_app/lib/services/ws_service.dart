@@ -1,5 +1,6 @@
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 
 class WSService {
   WebSocketChannel? _channel;
@@ -11,10 +12,12 @@ class WSService {
         try {
           final data = jsonDecode(message);
           // handle updates: e.g. notify listeners / stream controllers in app
-          print("WS message: $data");
-        } catch (e) {}
+          debugPrint("WS message: $data");
+        } catch (e) {
+          debugPrint("WS decode error: $e");
+        }
       }, onError: (err) {
-        print("WS error $err");
+        debugPrint("WS error $err");
         reconnect();
       }, onDone: () {
         reconnect();

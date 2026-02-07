@@ -36,14 +36,15 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return; // πολύ σημαντικό
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        MaterialPageRoute(builder: (_) => const HomeRouter()),
       );
     } catch (e) {
       if (!mounted) return;
       Fluttertoast.showToast(msg: e.toString());
     } finally {
-      if (!mounted) return;
-      setState(() => loading = false);
+      if (mounted) {
+        setState(() => loading = false);
+      }
     }
   }
 

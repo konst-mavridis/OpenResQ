@@ -113,7 +113,8 @@ class _ReportFormState extends State<ReportForm> {
       await api.createReport(payload);
 
       Fluttertoast.showToast(msg: 'Report submitted!');
-      if (context.mounted) Navigator.pop(context, true);
+      if (!mounted) return;
+      Navigator.pop(context, true);
     } catch (e) {
       Fluttertoast.showToast(msg: 'Failed to submit report: $e');
     } finally {

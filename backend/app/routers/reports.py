@@ -2,7 +2,7 @@
 Reports/Incidents router - unified endpoint for report creation, retrieval, and updates.
 All business logic is delegated to ReportService.
 """
-from fastapi import APIRouter, Depends, HTTPException 
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 import json
 import time 
@@ -29,11 +29,64 @@ import os
 import requests
 import asyncio
 from ..services.trust_service import TrustService
+from ..services.user_service import UserRepository
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/reports", tags=["Reports"])
 report_service = ReportService()
 firestore_listeners = {}
+
+
+def haversine_distance(lat1, lon1, lat2, lon2):
+    return report_service.haversine_distance(lat1, lon1, lat2, lon2)
+
+
+def _increment_stats(uid: str, field: str):
+    user_ref = db.collection("users").document(uid)
+    stats_ref = user_ref.collection("stats").document("dispatch_stats")
+
+    # increment in user document
+    user_ref.set({
+        field: firestore.Increment(1)
+    }, merge=True)
+
+    # increment in stats document
+    stats_ref.set({
+        field: firestore.Increment(1)
+    }, merge=True)
+
+
+def _tx_inc(tx, user_ref, stats_ref, field: str):
+    user_doc = tx.get(user_ref)
+    stats_doc = tx.get(stats_ref)
+
+    user_data = user_doc.to_dict() if user_doc.exists else {}
+    stats_data = stats_doc.to_dict() if stats_doc.exists else {}
+
+    user_val = int(user_data.get(field, 0)) + 1
+    stats_val = int(stats_data.get(field, 0)) + 1
+
+    tx.set(user_ref, {field: user_val}, merge=True)
+    tx.set(stats_ref, {field: stats_val}, merge=True)
+
+
+def _has_active_report(uid: str) -> bool:
+    queries = [
+        db.collection("reports")
+        .where("assignedTo", "==", uid)
+        .where("status", "in", ["assigned", "in_progress"])
+        .limit(1),
+        db.collection("reports")
+        .where("assigned_to", "==", uid)
+        .where("status", "in", ["assigned", "in_progress"])
+        .limit(1),
+    ]
+
+    for query in queries:
+        if any(True for _ in query.stream()):
+            return True
+    return False
+
 openai.api_key = os.getenv("OPENAI_API_KEY")  # set στο environment
 
 
@@ -155,18 +208,15 @@ async def create_report(data: CreateReport, user=Depends(verify_token)):
                 status_code=403,
                 detail="Your trust score is too low to submit reports"
             )
-
-        trust_service = TrustService(db)
+        repo=UserRepository(db)
+        # Trust service check
+        trust_service = TrustService(repo)
 
         if not trust_service.can_submit(user["uid"], data.event_type):
             raise HTTPException(status_code=403, detail="Your trust score is too low to submit this type of report")
 
         # Μετά την δημιουργία του report και AI analysis
-        trust_service.apply_report_feedback(
-            user_id=user["uid"],
-            report_verified=True if ai_score > 0.7 else False,
-            ai_confidence=ai_score
-        )
+
         # ==========================
         # 4) UPLOAD MEDIA
         # ==========================
@@ -201,9 +251,15 @@ async def create_report(data: CreateReport, user=Depends(verify_token)):
 
             print(f"[AI] score={ai_score}, fire={ai_fire_detected}")
 
-            # If AI is 0 confidence and event is fire → soft warning
-            if data.event_type == "fire" and ai_score < 0.1:
+        # If AI is 0 confidence and event is fire → soft warning
+        if data.event_type == "fire" and ai_score < 0.1:
                 print("[WARNING] Low AI confidence for fire report")
+
+                trust_service.apply_report_feedback(
+            user_id=user["uid"],
+            report_verified=True if ai_score > 0.7 else False,
+            ai_confidence=ai_score
+        )
 
         # ==========================
         # 6) CREATE REPORT
@@ -317,6 +373,24 @@ def all_reports(user=Depends(verify_token)):
             res.append(d)
     return res
 
+# assigned reports for responder
+@router.get("/assigned", response_model=List[dict])
+def assigned_reports(user=Depends(require_role("responder","admin"))):
+    uid = user["uid"]
+
+    # Fetch only reports assigned to this responder
+    reports = db.collection("reports") \
+        .where("assignedTo", "==", uid) \
+        .where("status", "==", "assigned") \
+        .stream()
+
+    result = []
+    for r in reports:
+        data = r.to_dict()
+        data["id"] = r.id
+        result.append(data)
+
+    return result
 
 @router.get("/{report_id}")
 def get_report(report_id: str, user=Depends(verify_token)):
@@ -424,28 +498,6 @@ def add_responder_note(
         raise HTTPException(status_code=400, detail=str(e))
 
     return res
-
-# assigned reports for responder
-@router.get("/assigned", response_model=List[dict])
-def assigned_reports(user=Depends(require_role("responder","admin"))):
-    user_doc = db.collection("users").document(user["uid"]).get()
-    if not user_doc.exists:
-        raise HTTPException(404, "User not found")
-    u = user_doc.to_dict()
-    area = u.get("area", {})
-    center_lat = area.get("lat")
-    center_lng = area.get("lng")
-    radius = area.get("radius_km", 20.0)
-
-    res = []
-    for r in db.collection("reports").where("deleted", "!=", True).stream():
-        d = r.to_dict()
-        if is_within_radius(center_lat, center_lng, d.get("latitude"), d.get("longitude"), radius):
-            d["id"] = r.id
-            res.append(d)
-    return res
-
-
 
 # responder update - includes FCM + websocket broadcast
 @router.patch("/{report_id}/respond", response_model=dict)
@@ -651,3 +703,242 @@ def mark_seen(report_id: str, user=Depends(verify_token)):
         m.reference.update({"seen": True})
 
     return {"status": "ok"}
+
+@router.post("/{report_id}/resolve")
+def resolve_report(
+    report_id: str,
+    responder_uid: str = Query(...)
+):
+    report_ref = db.collection("reports").document(report_id)
+    report_doc = report_ref.get()
+
+    if not report_doc.exists:
+        raise HTTPException(404, "Report not found")
+
+    report = report_doc.to_dict()
+
+    if report.get("assignedTo") != responder_uid:
+        raise HTTPException(400, "You are not assigned to this report")
+
+    report_ref.update({
+        "status": "resolved",
+        "resolved_at": datetime.datetime.utcnow(),
+        "assignedTo": firestore.DELETE_FIELD,
+        "assigned_at": firestore.DELETE_FIELD,
+        "on_hold_for": firestore.DELETE_FIELD,
+        "on_hold_at": firestore.DELETE_FIELD
+    })
+
+    return {"status": "resolved", "report_id": report_id}
+
+
+# ---------------------------------------------------------
+# MANUAL UNASSIGN
+# ---------------------------------------------------------
+@router.post("/{report_id}/unassign")
+def unassign_report(
+    report_id: str,
+    responder_uid: str = Query(...)
+):
+    report_ref = db.collection("reports").document(report_id)
+    report_doc = report_ref.get()
+
+    if not report_doc.exists:
+        raise HTTPException(404, "Report not found")
+
+    report = report_doc.to_dict()
+
+    if report.get("assignedTo") != responder_uid:
+        raise HTTPException(400, "You are not assigned to this report")
+
+    report_ref.update({
+        "status": "pending",
+        "assignedTo": firestore.DELETE_FIELD,
+        "assigned_at": firestore.DELETE_FIELD,
+        "on_hold_for": firestore.DELETE_FIELD,
+        "on_hold_at": firestore.DELETE_FIELD
+    })
+
+    return {"status": "pending", "report_id": report_id}
+
+@router.post("/{report_id}/assign")
+def manual_assign(
+    report_id: str,
+    responder_uid: str = Query(...)
+):
+    # Validate responder
+    user_doc = db.collection("users").document(responder_uid).get()
+    if not user_doc.exists:
+        raise HTTPException(status_code=404, detail="Responder not found")
+
+    user = user_doc.to_dict()
+    if user.get("role") != "responder":
+        raise HTTPException(status_code=400, detail="User is not a responder")
+    if not user.get("on_duty", False):
+        raise HTTPException(status_code=400, detail="Responder is OFF DUTY")
+
+    # Check if responder already has an active report
+    if _has_active_report(responder_uid):
+        raise HTTPException(status_code=400, detail="Responder already has an active report")
+
+    # Validate report
+    report_ref = db.collection("reports").document(report_id)
+    report_doc = report_ref.get()
+    if not report_doc.exists:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    report = report_doc.to_dict()
+    if report.get("status") not in ["pending", "unassigned", None, "community_verified"]:
+        raise HTTPException(status_code=400, detail="Report is not available for assignment")
+
+    now = datetime.datetime.utcnow()
+
+    # Assign the report
+    report_ref.update({
+        "assignedTo": responder_uid,
+        "status": "assigned",
+        "assigned_at": now,
+        "on_hold_for": firestore.DELETE_FIELD,
+        "on_hold_at": firestore.DELETE_FIELD
+    })
+
+    # Update responder stats
+    db.collection("users").document(responder_uid).update({
+        "last_assigned_at": now
+    })
+
+    _increment_stats(responder_uid, "accepted_reports")
+
+    return {
+        "status": "assigned",
+        "report_id": report_id,
+        "responder": responder_uid
+    }
+
+
+@router.post("/suggest_for_responder")
+def suggest_for_responder(
+    responder_uid: str = Query(...),
+    lat: float = Query(...),
+    lng: float = Query(...)
+):
+    user_ref = db.collection("users").document(responder_uid)
+    user_doc = user_ref.get()
+    if not user_doc.exists:
+        raise HTTPException(404, "Responder not found")
+
+    user = user_doc.to_dict()
+    if user.get("role") != "responder":
+        raise HTTPException(400, "User is not a responder")
+    if not user.get("on_duty", False):
+        raise HTTPException(400, "Responder is OFF DUTY")
+
+    if _has_active_report(responder_uid):
+        return {"suggested": None}
+
+    last_assigned_at = user.get("last_assigned_at")
+    if last_assigned_at:
+        if hasattr(last_assigned_at, "to_datetime"):
+            last_dt = last_assigned_at.to_datetime().replace(tzinfo=None)
+        else:
+            last_dt = last_assigned_at.replace(tzinfo=None)
+
+        if datetime.datetime.utcnow() - last_dt < datetime.timedelta(hours=1):
+            return {"suggested": None}
+
+    reports = db.collection("reports") \
+        .where("status", "in", ["pending", "unassigned"]) \
+        .stream()
+
+    candidates = []
+
+    for d in reports:
+        r = d.to_dict()
+        r_id = d.id
+
+        if responder_uid in r.get("rejected_by", []):
+            continue
+
+        r_lat = r.get("latitude")
+        r_lng = r.get("longitude")
+        if r_lat is None or r_lng is None:
+            continue
+
+        dist = haversine_distance(lat, lng, r_lat, r_lng)
+        if dist < 0.3:
+            continue
+
+        sev = r.get("severity", 1)
+        if isinstance(sev, str):
+            sev_map = {"low": 1, "medium": 2, "high": 3}
+            severity = sev_map.get(sev.lower(), 1)
+        else:
+            severity = int(sev)
+
+        created_at = r.get("created_at") or datetime.datetime.utcnow()
+        if hasattr(created_at, "to_datetime"):
+            created_at = created_at.to_datetime()
+
+        candidates.append({
+            "id": r_id,
+            "severity": severity,
+            "distance": dist,
+            "created_at": created_at,
+            "data": r
+        })
+
+    if not candidates:
+        return {"suggested": None}
+
+    candidates.sort(
+        key=lambda x: (-x["severity"], x["distance"], -x["created_at"].timestamp())
+    )
+
+    best = candidates[0]
+    report_id = best["id"]
+
+    db.collection("reports").document(report_id).update({
+        "on_hold_for": responder_uid,
+        "on_hold_at": datetime.datetime.utcnow()
+    })
+
+    best["data"]["id"] = report_id
+    return {"suggested": best["data"]}
+
+
+@router.post("/{report_id}/accept_suggest")
+def accept_suggest(
+    report_id: str,
+    responder_uid: str = Query(...)
+):
+    report_ref = db.collection("reports").document(report_id)
+    report_doc = report_ref.get()
+    if not report_doc.exists:
+        raise HTTPException(404, "Report not found")
+
+    report = report_doc.to_dict()
+
+    if report.get("on_hold_for") != responder_uid:
+        raise HTTPException(400, "Report is not on hold for this responder")
+
+    if _has_active_report(responder_uid):
+        raise HTTPException(400, "Responder already has an active report")
+
+    now = datetime.datetime.utcnow()
+
+    report_ref.update({
+        "assignedTo": responder_uid,
+        "status": "assigned",
+        "assigned_at": now,
+        "on_hold_for": firestore.DELETE_FIELD,
+        "on_hold_at": firestore.DELETE_FIELD
+    })
+
+    db.collection("users").document(responder_uid).update({
+        "last_assigned_at": now
+    })
+
+    _increment_stats(responder_uid, "accepted_reports")
+
+    return {"status": "assigned", "report_id": report_id}
+

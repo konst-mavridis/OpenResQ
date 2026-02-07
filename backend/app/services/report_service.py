@@ -281,7 +281,7 @@ class ReportService:
         reports = []
         query = self.db.collection("reports").where("deleted", "!=", True).stream()
         for r in query:
-            d = r.to_dict()
+            d = r
             created_at = d.get("created_at")
             if created_at and created_at >= past_time:
                 d["id"] = r.id
@@ -383,3 +383,23 @@ class ReportService:
         except Exception as e:
             logger.error(f"Failed to update report {report_id}: {e}")
             raise
+
+    def get_nearby_responders(self, admin_lat, admin_lng, radius_km=25):
+        docs = self.db.collection("users").where("role", "==", "responder").stream()
+        responders = []
+
+        for doc in docs:
+            data = doc.to_dict()
+            area = data.get("area", {})
+            lat = area.get("latitude")
+            lng = area.get("longitude")
+
+            if lat is None or lng is None:
+                continue
+
+            if self.haversine_distance(admin_lat, admin_lng, lat, lng) <= radius_km:
+                data["uid"] = doc.id
+                responders.append(data)
+
+        return responders
+
