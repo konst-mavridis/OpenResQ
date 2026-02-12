@@ -10,6 +10,7 @@ import '../models/report.dart';
 import '../screens/navigations_screen.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class ResponderHomePage extends StatefulWidget {
   const ResponderHomePage({super.key});
@@ -203,6 +204,16 @@ class _ResponderHomePageState extends State<ResponderHomePage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Responder Dashboard"),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+              if (!mounted) return;
+              Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+            },
+          ),
+        ]
       ),
       body: Column(
         children: [

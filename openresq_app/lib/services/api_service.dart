@@ -459,4 +459,87 @@ class ApiService {
         throw Exception(res.body);
       }
   }
+  Future<void> resetPassword(String token, String newPassword) async {
+    final res = await http.post(
+      Uri.parse("$baseUrl/auth/reset-password"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({
+        "token": token,
+        "new_password": newPassword,
+      }),
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception(jsonDecode(res.body)["error"] ?? "Reset failed");
+    }
+  }
+  Future<void> sendOTP(String email) async {
+    final res = await http.post(
+      Uri.parse("$baseUrl/auth/send-otp"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"email": email}),
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception(jsonDecode(res.body)["detail"]);
+    }
+  }
+
+  Future<void> verifyOTP(String email, String otp) async {
+    final res = await http.post(
+      Uri.parse("$baseUrl/auth/verify-otp"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"email": email, "otp": otp}),
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception(jsonDecode(res.body)["detail"]);
+    }
+  }
+  
+  Future<void> resendOTP(String email) async {
+    final res = await http.post(
+      Uri.parse("$baseUrl/auth/resend-otp"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"email": email}),
+    );
+
+    if (res.statusCode != 200) {
+      final body = jsonDecode(res.body);
+      throw Exception(body["detail"] ?? "Failed to resend OTP");
+    }
+  }
+  Future<List<dynamic>> fetchNearbyCitizens(double lat, double lng) async {
+    final res = await http.get(
+      Uri.parse("$baseUrl/admin/nearby-citizens?lat=$lat&lng=$lng&radius_km=25"),
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception("Failed to load nearby citizens");
+    }
+
+    return jsonDecode(res.body);
+  }
+
+  // 2) Promote citizen → responder
+  Future<void> promoteToResponder(String uid) async {
+    final res = await http.post(
+      Uri.parse("$baseUrl/admin/promote/$uid"),
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception("Failed to promote user");
+    }
+  }
+
+  // 3) Invite responder by email
+  Future<void> inviteResponder(String email) async {
+    final res = await http.post(
+      Uri.parse("$baseUrl/admin/invite-responder?email=$email"),
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception("Failed to send invite");
+    }
+  }
 }

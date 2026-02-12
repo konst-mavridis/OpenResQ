@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:openresq_app/services/api_service.dart';
 import '../models/report.dart';
 import '../services/auth_service.dart';

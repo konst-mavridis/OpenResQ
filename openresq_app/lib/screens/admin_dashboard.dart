@@ -4,11 +4,14 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:fl_chart/fl_chart.dart';
-
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/api_service.dart';
 import '../../services/live_responders_service.dart';
-import '../widgets/stat_card.dart';
 import '../widgets/responder_tile.dart';
+import '../widgets/add_responder_dial.dart';
+import '../screens/admin_requests_screen.dart';
+import '../screens/logs_screen.dart';
 
 class AdminDashboardPage extends StatefulWidget {
   const AdminDashboardPage({super.key});
@@ -23,6 +26,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
   StreamSubscription? _responderStream;
   StreamSubscription<Position>? _adminLocationStream;
+  StreamSubscription? _firestoreResponderStream;
 
   Map<String, dynamic> stats = {};
   List<Map<String, dynamic>> responders = [];
@@ -35,7 +39,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
   final MapController _map = MapController();
 
-  // Live responder circles
   final List<CircleMarker> responderCircles = [];
 
   @override
@@ -44,12 +47,14 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     loadAll();
     _startAdminLocation();
     _startResponderStream();
+    _startFirestoreResponderListener();
   }
 
   @override
   void dispose() {
     _responderStream?.cancel();
     _adminLocationStream?.cancel();
+    _firestoreResponderStream?.cancel();
     super.dispose();
   }
 
@@ -64,7 +69,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
     try {
       stats = await api.fetchAdminStats();
-      responders = List<Map<String, dynamic>>.from(await api.fetchResponders());
       reports = List<Map<String, dynamic>>.from(await api.getNearbyReports());
 
       loading = false;
@@ -78,7 +82,25 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   }
 
   // -----------------------------
-  // LIVE RESPONDERS
+  // REAL-TIME RESPONDERS FROM FIRESTORE
+  // -----------------------------
+  void _startFirestoreResponderListener() {
+    _firestoreResponderStream = FirebaseFirestore.instance
+        .collection("users")
+        .where("role", isEqualTo: "responder")
+        .snapshots()
+        .listen((snapshot) {
+            responders = snapshot.docs.map((d) {
+              final data = d.data() as Map<String, dynamic>;
+              data['uid'] = d.id; // 🔥 Βάζουμε το UID σωστά
+              return data;
+            }).toList();
+      setState(() {});
+    });
+  }
+
+  // -----------------------------
+  // LIVE RESPONDERS (WEBSOCKET)
   // -----------------------------
   void _startResponderStream() {
     _responderStream = liveResponders.connect().listen((event) {
@@ -93,7 +115,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
       if (type == "responder_removed") {
         responderCircles.removeWhere(
-            (c) => c.key == ValueKey(event["uid"]));
+          (c) => c.key == ValueKey(event["uid"]),
+        );
       }
 
       setState(() {});
@@ -143,7 +166,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
       setState(() => _adminLocation = newPos);
 
-      // Auto-center
       _map.move(newPos, 14);
 
       api.updateMyArea(
@@ -174,8 +196,10 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text("Reports Severity Breakdown",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const Text(
+          "Reports Severity Breakdown",
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
         SizedBox(
           height: 200,
           child: PieChart(
@@ -205,7 +229,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   }
 
   // -----------------------------
-  // HEATMAP (SEPARATE)
+  // HEATMAP
   // -----------------------------
   Widget _buildHeatmap() {
     final List<FlSpot> spots = [];
@@ -221,8 +245,10 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text("Reports per Hour (Heatmap Style)",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const Text(
+          "Reports per Hour (Heatmap Style)",
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
         SizedBox(
           height: 200,
           child: LineChart(
@@ -257,22 +283,107 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       appBar: AppBar(
         title: const Text("Admin Dashboard"),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: loadAll),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: loadAll,
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+              if (!mounted) return;
+              Navigator.pushNamedAndRemoveUntil(
+                context,
+                '/',
+                (route) => false,
+              );
+            },
+          ),
         ],
       ),
+
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            DrawerHeader(
+              decoration: const BoxDecoration(color: Colors.redAccent),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Text(
+                    "Admin Menu",
+                    style: TextStyle(color: Colors.white, fontSize: 22),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    "Manage system settings",
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                ],
+              ),
+            ),
+
+            ListTile(
+              leading: const Icon(Icons.verified_user),
+              title: const Text("Approve Responders"),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const AdminResponderRequestsScreen(),
+                  ),
+                );
+              },
+            ),
+
+            ListTile(
+              leading: const Icon(Icons.list_alt),
+              title: const Text("System Logs"),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const LogsPage(),
+                  ),
+                );
+              },
+            ),
+
+            const Divider(),
+
+            ListTile(
+              leading: const Icon(Icons.logout),
+              title: const Text("Logout"),
+              onTap: () async {
+                await FirebaseAuth.instance.signOut();
+                if (!context.mounted) return;
+                Navigator.pushNamedAndRemoveUntil(
+                  context,
+                  '/',
+                  (route) => false,
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (error != null)
-              Text(error!, style: const TextStyle(color: Colors.red)),
+              Text(
+                error!,
+                style: const TextStyle(color: Colors.red),
+              ),
 
             const SizedBox(height: 12),
 
-            // -----------------------------
-            // MAP
-            // -----------------------------
             SizedBox(
               height: 300,
               child: FlutterMap(
@@ -288,10 +399,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                     userAgentPackageName: "openresq.admin",
                   ),
 
-                  // Responders
                   CircleLayer(circles: responderCircles),
 
-                  // Admin
                   if (_adminLocation != null)
                     CircleLayer(
                       circles: [
@@ -310,28 +419,59 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
             const SizedBox(height: 20),
 
-            // -----------------------------
-            // CHARTS
-            // -----------------------------
             _buildCharts(),
             const SizedBox(height: 20),
             _buildHeatmap(),
 
             const SizedBox(height: 20),
 
-            // -----------------------------
-            // RESPONDERS LIST
-            // -----------------------------
-            const Text("Responders",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const Text(
+              "Responders",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 8),
 
             ...responders.map(
               (r) => ResponderTile(
                 responder: r,
                 onRemove: () async {
-                  await api.removeResponder(r['uid']);
-                  loadAll();
+                  final uid = r['uid'] as String;
+
+                  // backend cleanup (αν το χρειάζεσαι)
+                  await api.removeResponder(uid);
+
+                  // Firestore: ο χρήστης παύει να είναι responder
+                  await FirebaseFirestore.instance
+                      .collection("users")
+                      .doc(uid)
+                      .update({"role": "citizen"});
+                  // Το Firestore stream θα τον αφαιρέσει αυτόματα από τη λίστα
+                },
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            Center(
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.person_add),
+                label: const Text("Add Responder"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blueAccent,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 14,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (_) =>
+                        AddResponderDialog(adminLocation: _adminLocation),
+                  );
                 },
               ),
             ),

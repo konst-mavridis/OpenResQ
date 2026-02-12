@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-import 'screens/login_screen.dart';
+import 'screens/auth_gate.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'services/api_service.dart';
+
 
 void main() async {
   final api = ApiService();
@@ -43,7 +43,7 @@ class OpenResQApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.red,
       ),
-      home: LoginScreen(),
+      home: AuthGate(),
     );
   }
 }

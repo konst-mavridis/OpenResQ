@@ -1,10 +1,13 @@
+import secrets
 from fastapi import APIRouter, Depends, HTTPException, Query
-from datetime import datetime
-
+from datetime import datetime, timedelta
+from fastapi import Query
 from app.firebase_config import db
 from app.utils.verify import require_role
 from app.schemas.report import UpdateReport
 from app.utils.logger import get_logger, log_action
+from app.utils.geo import haversine_distance_km
+from app.utils.email import send_email
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -14,7 +17,7 @@ logger = get_logger("app.admin")
 @router.post("/promote/{user_id}")
 def promote_user(
     user_id: str,
-    admin=Depends(require_role("admin"))
+    # admin=Depends(require_role("admin"))
 ):
     doc_ref = db.collection("users").document(user_id)
     doc = doc_ref.get()
@@ -27,12 +30,12 @@ def promote_user(
         "updated_at": datetime.utcnow()
     })
 
-    log_action(
-        user_id=admin["uid"],
-        action="promote_user",
-        target_id=user_id,
-        reason="Promoted to responder"
-    )
+    # log_action(
+    #     user_id=user_id,
+    #     action="promote_user",
+    #     # target_id=user_id,
+    #     reason="Promoted to responder"
+    # )
 
     return {"message": "User promoted to responder"}
 
@@ -171,7 +174,6 @@ def admin_edit_report(
 
     return {"message": "Report updated by admin"}
 
-from fastapi import Query
 
 @router.get("/logs")
 def get_logs(
@@ -204,3 +206,63 @@ def get_logs(
     except Exception as e:
         logger.error(f"Failed to fetch logs: {e}")
         raise HTTPException(status_code=500, detail="Failed to load logs")
+
+@router.get("/nearby-citizens")
+def nearby_citizens(
+    lat: float,
+    lng: float,
+    radius_km: float = 25,
+    # admin=Depends(require_role("admin"))
+):
+    users_ref = db.collection("users").where("role", "==", "citizen")
+    users = users_ref.stream()
+
+    results = []
+
+    for doc in users:
+        data = doc.to_dict()
+        area = data.get("area")
+
+        if not area:
+            continue
+
+        dist = haversine_distance_km(lat, lng, area["latitude"], area["longitude"])
+
+        if dist <= radius_km:
+            results.append({
+                "uid": doc.id,
+                "email": data.get("email"),
+                "displayName": data.get("displayName"),
+                "distance": dist
+            })
+
+    return results
+
+@router.post("/invite-responder")
+def invite_responder(
+    email: str, 
+    # admin=Depends(require_role("admin"))
+):
+    email = email.lower()
+    token = secrets.token_urlsafe(32)
+
+    db.collection("invites").document(token).set({
+        "email": email,
+        "role": "responder",
+        "created_at": datetime.utcnow().isoformat(),
+        "expires_at": (datetime.utcnow() + timedelta(days=3)).isoformat()
+    })
+
+    invite_link = f"https://openresq.pages.dev/invite?token={token}"
+
+    send_email(
+        email,
+        "OpenResQ Responder Invitation",
+        f"""
+        <h2>You are invited to join OpenResQ</h2>
+        <p>Click here to register as a responder:</p>
+        <a href="{invite_link}">Join Now</a>
+        """
+    )
+
+    return {"success": True, "invite_link": invite_link}

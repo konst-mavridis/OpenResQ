@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -8,6 +7,7 @@ import '../models/report.dart';
 import '../widgets/report_form.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class UserHomePage extends StatefulWidget {
   const UserHomePage({super.key});
@@ -165,6 +165,16 @@ class _UserHomePageState extends State<UserHomePage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("OpenResQ — Citizen"),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+              if (!mounted) return;
+              Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+            },
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
