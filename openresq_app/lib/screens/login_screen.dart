@@ -9,6 +9,9 @@ import 'package:fluttertoast/fluttertoast.dart';
 import '../services/auth_service.dart';
 import 'home_screen.dart';
 import 'register_screen.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -69,6 +72,18 @@ class _LoginScreenState extends State<LoginScreen>
 
     _animController.forward();
   }
+
+  Future<void> saveFcmToken() async {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final token = await FirebaseMessaging.instance.getToken();
+
+    if (token != null) {
+      await FirebaseFirestore.instance.collection("users").doc(uid).update({
+        "fcmToken": token,
+      });
+    }
+  }
+
 
   Future<void> _loadRememberedEmail() async {
     final prefs = await SharedPreferences.getInstance();

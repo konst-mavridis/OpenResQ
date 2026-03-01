@@ -3,6 +3,9 @@ import 'package:fluttertoast/fluttertoast.dart';
 import '../services/auth_service.dart';
 import '../services/api_service.dart';
 import 'otp_screen.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 enum UserRole { citizen, responder }
 
@@ -34,6 +37,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
     passController.dispose();
     displayNameController.dispose();
     super.dispose();
+  }
+
+
+
+  Future<void> saveFcmToken() async {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final token = await FirebaseMessaging.instance.getToken();
+
+    if (token != null) {
+      await FirebaseFirestore.instance.collection("users").doc(uid).update({
+        "fcmToken": token,
+      });
+    }
   }
 
   Future<void> _register() async {

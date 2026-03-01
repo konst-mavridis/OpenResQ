@@ -10,6 +10,8 @@ import '../models/report.dart';
 import '../screens/navigations_screen.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+// import '../services/location_service.dart';
+import 'nearby_teams_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class ResponderHomePage extends StatefulWidget {
@@ -213,6 +215,17 @@ class _ResponderHomePageState extends State<ResponderHomePage> {
               Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
             },
           ),
+
+          IconButton(
+            icon: const Icon(Icons.group),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const NearbyTeamsScreen()),
+              );
+            },
+          ),
+
         ]
       ),
       body: Column(
@@ -496,70 +509,70 @@ class _ResponderHomePageState extends State<ResponderHomePage> {
       ),
     );
   }
-  Widget _buildDebugButtons() {
-  return Padding(
-    padding: const EdgeInsets.symmetric(vertical: 8),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        ElevatedButton(
-          onPressed: () async {
-            if (_userLocation == null) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("No location available")),
-              );
-              return;
-            }
+//   Widget _buildDebugButtons() {
+//   return Padding(
+//     padding: const EdgeInsets.symmetric(vertical: 8),
+//     child: Row(
+//       mainAxisAlignment: MainAxisAlignment.center,
+//       children: [
+//         ElevatedButton(
+//           onPressed: () async {
+//             if (_userLocation == null) {
+//               ScaffoldMessenger.of(context).showSnackBar(
+//                 const SnackBar(content: Text("No location available")),
+//               );
+//               return;
+//             }
 
-            print("DEBUG: Calling suggest_for_responder manually...");
+//             print("DEBUG: Calling suggest_for_responder manually...");
 
-            final response = await api.suggestForResponder(
-              responderUid: auth.uid!,
-              lat: _userLocation!.latitude,
-              lng: _userLocation!.longitude,
-            );
+//             final response = await api.suggestForResponder(
+//               responderUid: auth.uid!,
+//               lat: _userLocation!.latitude,
+//               lng: _userLocation!.longitude,
+//             );
 
-            print("DEBUG RAW RESPONSE: $response");
+//             print("DEBUG RAW RESPONSE: $response");
 
-            if (response == null || response["suggested"] == null) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("No suggestion returned")),
-              );
-              return;
-            }
+//             if (response == null || response["suggested"] == null) {
+//               ScaffoldMessenger.of(context).showSnackBar(
+//                 const SnackBar(content: Text("No suggestion returned")),
+//               );
+//               return;
+//             }
 
-            final reportJson = response["suggested"];
-            final report = Report.fromJson(reportJson);
+//             final reportJson = response["suggested"];
+//             final report = Report.fromJson(reportJson);
 
-            if (!mounted) return;
+//             if (!mounted) return;
 
-            showDialog(
-              context: context,
-              builder: (_) {
-                return AlertDialog(
-                  title: const Text("DEBUG: Προτεινόμενο περιστατικό"),
-                  content: Text(
-                    "ID: ${report.id}\n"
-                    "Title: ${report.title}\n"
-                    "Severity: ${report.severity}\n"
-                    "On hold for: ${reportJson["on_hold_for"]}\n"
-                    "Status: ${report.status}",
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text("OK"),
-                    ),
-                  ],
-                );
-              },
-            );
-          },
-          child: const Text("DEBUG: Auto‑Suggest"),
-        ),
-      ],
-    ),
-  );
-}
-
+//             showDialog(
+//               context: context,
+//               builder: (_) {
+//                 return AlertDialog(
+//                   title: const Text("DEBUG: Προτεινόμενο περιστατικό"),
+//                   content: Text(
+//                     "ID: ${report.id}\n"
+//                     "Title: ${report.title}\n"
+//                     "Severity: ${report.severity}\n"
+//                     "On hold for: ${reportJson["on_hold_for"]}\n"
+//                     "Status: ${report.status}",
+//                   ),
+//                   actions: [
+//                     TextButton(
+//                       onPressed: () => Navigator.pop(context),
+//                       child: const Text("OK"),
+//                     ),
+//                   ],
+//                 );
+//               },
+//             );
+//           },
+//           child: const Text("DEBUG: Auto‑Suggest"),
+//         ),
+//       ],
+//     ),
+//   );
+// }
+ 
 }

@@ -13,12 +13,13 @@ from typing import List, Optional
 import datetime
 import firebase_admin.firestore as admin_fs
 from app.firebase_config import db, fcm
+from app.services.fcm_service import send_push_to_token
 from app.services.report_service import ReportService
 from app.utils.verify import verify_token, require_role
 from app.schemas.report import CreateReport, PushTokenCreate, UpdateReport, ChatMessageCreate
 from app.utils.logger import log_action
 from app.utils.ws_manager import ws_manager
-from app.utils.geo import is_within_radius
+from app.utils.geo import haversine_distance_km, is_within_radius
 from firebase_admin import firestore, storage
 from ..services.validation_service import calculate_confidence, InputValidator
 from ..services.incident_matcher import find_similar_reports
@@ -278,6 +279,16 @@ async def create_report(data: CreateReport, user=Depends(verify_token)):
         )
 
         print("[DEBUG] Report created:", report["id"])
+        distance_km = haversine_distance_km(user["lat"], user["lng"], data.latitude, data.longitude)
+        if distance_km <= 20: 
+            token = user.get("fcm_token")
+            if token:
+                send_push_to_token(
+                    token, 
+                    "New Incident Nearby", 
+                    f"Severity: {data.severity}", 
+                    data={"incident_id": report["id"]}
+                )
 
         # ==========================
         # 7) CALCULATE CONFIDENCE

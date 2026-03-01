@@ -542,4 +542,55 @@ class ApiService {
       throw Exception("Failed to send invite");
     }
   }
+
+  Future<void> createTeam(String name) async {
+    final response = await http.post(
+      Uri.parse("$baseUrl/admin/teams/create"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"name": name}),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception("Failed to create team");
+    }
+  }
+
+  Future<void> assignLeader(String teamId, String leaderUid) async {
+    final response = await http.post(
+      Uri.parse("$baseUrl/admin/teams/$teamId/assign_leader"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"leader_uid": leaderUid}),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception("Failed to assign leader");
+    }
+  }
+
+  Future<dynamic> post(String path, Map<String, dynamic> body) async {
+    final headers = await _authHeaders();
+    final res = await http.post(
+      Uri.parse('$baseUrl$path'),
+      headers: headers,
+      body: jsonEncode(body),
+    );
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception(res.body);
+    }
+
+    return jsonDecode(res.body.isEmpty ? "{}" : res.body);
+  }
+
+  Future<dynamic> get(String path, {Map<String, dynamic>? params}) async {
+    final uri = Uri.parse(baseUrl + path).replace(
+      queryParameters: params?.map((k, v) => MapEntry(k, v.toString())),
+    );
+    final res = await http.get(uri);
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      return json.decode(res.body);
+    }
+    throw Exception('GET $uri failed: ${res.statusCode} ${res.body}');
+  }
+
 }

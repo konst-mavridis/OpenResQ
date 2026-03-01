@@ -25,9 +25,11 @@ from app.utils.ws_manager import ws_manager
 from app.utils.logger import get_logger
 from app.routers import votes
 from app.routers import admin_analytics, admin_responders
+from app.routers import teams  # <--- add teams router import
 from app.services.live_responders_service import start_responder_listener
 from app.services.duty_monitor_service import check_responder_activity
 from app.routers.responders import router as responders_router
+# from services.fcm_service import send_push_to_token
 
 # Initialize logger
 logger = get_logger(__name__)
@@ -143,6 +145,7 @@ app.include_router(votes.router)
 app.include_router(admin_reports.router)
 app.include_router(admin_analytics.router)
 app.include_router(admin_responders.router)
+app.include_router(teams.router)  # include teams endpoints
 app.include_router(responders_router)
 
 # ===== WebSocket Endpoint =====

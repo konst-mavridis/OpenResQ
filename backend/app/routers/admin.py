@@ -3,6 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from datetime import datetime, timedelta
 from fastapi import Query
 from app.firebase_config import db
+from app.schemas import user
+from app.services.fcm_service import send_push_to_token
 from app.utils.verify import require_role
 from app.schemas.report import UpdateReport
 from app.utils.logger import get_logger, log_action
@@ -30,6 +32,10 @@ def promote_user(
         "updated_at": datetime.utcnow()
     })
 
+    token = user.get("fcm_token") 
+    if token: 
+        send_push_to_token( token, "You are now a responder!", "An admin has approved your account.", )
+
     # log_action(
     #     user_id=user_id,
     #     action="promote_user",
@@ -39,6 +45,53 @@ def promote_user(
 
     return {"message": "User promoted to responder"}
 
+@router.post("/teams/create")
+def create_team(payload: dict):
+    name = payload["name"]
+    team_ref = db.collection("teams").document()
+    team_ref.set({
+        "name": name,
+        "leader_uid": None,
+        "members": [],
+        "created_at": datetime.utcnow()
+    })
+    return {"team_id": team_ref.id}
+
+@router.post("/teams/{team_id}/assign_leader")
+def assign_leader(team_id: str, payload: dict):
+    leader_uid = payload["leader_uid"]
+
+    team_ref = db.collection("teams").document(team_id)
+    team_data = team_ref.get().to_dict()
+
+    # 1) Remove old leader (if exists)
+    old_leader = team_data.get("leader_uid")
+    if old_leader and old_leader != leader_uid:
+        db.collection("users").document(old_leader).update({
+            "role": "responder"
+        })
+
+    # 2) Update team with new leader
+    #    also copy leader's area if available
+    leader_doc = db.collection("users").document(leader_uid).get()
+    leader_data = leader_doc.to_dict() or {}
+    leader_area = leader_data.get("area")
+
+    update_payload = {"leader_uid": leader_uid}
+    if leader_area is not None:
+        update_payload["area"] = leader_area
+
+    team_ref.update(update_payload)
+
+    # 3) Update new leader role
+    db.collection("users").document(leader_uid).update({
+        "role": "team_leader",
+        "team_id": team_id
+    })
+
+
+
+    return {"status": "leader_changed"}
 
 @router.post("/responder/{user_id}/area")
 def set_responder_area(

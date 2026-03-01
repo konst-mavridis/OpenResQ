@@ -48,14 +48,7 @@ def register_user(data: RegisterUser):
 
 @router.get("/auth/me")
 def get_current_user(user=Depends(verify_token)):
-    """Get current logged-in user profile."""
-    return {
-        "uid": user["uid"],
-        "email": user["email"],
-        "display_name": user["display_name"],
-        "role": user["role"],
-        "area": user.get("area", {})
-    }
+    return user
 
 
 @router.delete("/auth/delete")

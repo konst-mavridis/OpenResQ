@@ -28,26 +28,12 @@ def _get_bearer_token(authorization: Optional[str]) -> Optional[str]:
 
 
 def verify_token(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
-    """
-    Verify Firebase ID token and return user context.
-    
-    Args:
-        authorization: Authorization header with Bearer token
-    
-    Returns:
-        User context dictionary with uid, email, role, etc.
-    
-    Raises:
-        HTTPException: If token is missing, invalid, or verification fails
-    """
     token = _get_bearer_token(authorization)
     
     if not token:
-        log_action(logger, "authentication", "failed", details={"reason": "missing_token"})
         raise HTTPException(status_code=401, detail="Missing authentication token")
     
     try:
-        # Verify Firebase ID token
         auth = get_auth()
         decoded = auth.verify_id_token(token)
         
@@ -55,53 +41,36 @@ def verify_token(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
         if not uid:
             raise ValueError("No user ID in token")
         
-        # Get user profile from Firestore
         db = get_db()
         user_doc = db.collection("users").document(uid).get()
         
         if user_doc.exists:
             user_data = user_doc.to_dict()
-            role = user_data.get("role", "citizen")
-            area = user_data.get("area", {})
-            if "trust_score" not in user_data:
-                # Default trust score
-                user_data["trust_score"] = 0.5
         else:
-            # Create default user profile if doesn't exist
-            role = "citizen"
-            area = {
-                "latitude": 37.9838,
-                "longitude": 23.7275,
-                "radius_km": 20.0
-            }
-            default_profile = {
+            # Create default user
+            user_data = {
                 "uid": uid,
                 "email": decoded.get("email"),
                 "display_name": decoded.get("name", "Anonymous"),
-                "role": role,
-                "area": area,
+                "role": "citizen",
+                "area": {
+                    "latitude": 37.9838,
+                    "longitude": 23.7275,
+                    "radius_km": 20.0
+                },
                 "trust_score": 0.5,
                 "created_at": datetime.utcnow()
             }
-            db.collection("users").document(uid).set(default_profile)
-        
-        user_context = {
-            "uid": uid,
-            "email": decoded.get("email"),
-            "display_name": decoded.get("name", "Anonymous"),
-            "role": role,
-            "area": area
-        }
-        
-        return user_context
+            db.collection("users").document(uid).set(user_data)
+
+        # Ensure trust_score exists
+        if "trust_score" not in user_data:
+            user_data["trust_score"] = 0.5
+
+        # RETURN FULL FIRESTORE PROFILE
+        return user_data
         
     except Exception as e:
-        log_action(
-            logger,
-            "authentication",
-            "failed",
-            details={"reason": "token_verification_error", "error": str(e)}
-        )
         raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
 
 

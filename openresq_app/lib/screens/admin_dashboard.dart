@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:openresq_app/screens/admin_teams.dart';
 import '../../services/api_service.dart';
 import '../../services/live_responders_service.dart';
 import '../widgets/responder_tile.dart';
@@ -91,7 +92,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         .snapshots()
         .listen((snapshot) {
             responders = snapshot.docs.map((d) {
-              final data = d.data() as Map<String, dynamic>;
+              final data = d.data();
               data['uid'] = d.id; // 🔥 Βάζουμε το UID σωστά
               return data;
             }).toList();
@@ -333,6 +334,20 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   context,
                   MaterialPageRoute(
                     builder: (_) => const AdminResponderRequestsScreen(),
+                  ),
+                );
+              },
+            ),
+
+            ListTile(
+              leading: const Icon(Icons.groups),
+              title: const Text("Manage Teams"),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const TeamsScreen(),
                   ),
                 );
               },

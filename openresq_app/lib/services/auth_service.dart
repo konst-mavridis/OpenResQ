@@ -8,6 +8,7 @@ class AuthService {
 
   String? get uid => _auth.currentUser?.uid;
   String? get email => _auth.currentUser?.email;
+  User? get currentUser => _auth.currentUser;
 
   bool get isLoggedIn => _auth.currentUser != null;
 
