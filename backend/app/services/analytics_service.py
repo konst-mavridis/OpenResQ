@@ -2,15 +2,17 @@ from datetime import datetime, timedelta
 from firebase_admin import firestore
 import asyncio
 import logging
+from app.firebase_config import get_db
 from app.services.report_service import ReportService
 from app.utils.ws_manager import ws_manager
 from datetime import datetime, timedelta, timezone
+
 
 logger = logging.getLogger(__name__)
 
 class AnalyticsService:
     def __init__(self):
-        self.db = firestore.client()
+        self.db = get_db()
         self.report_service = ReportService()
 
     def overview(self, user_id, latitude: float, longitude: float, radius_km: float):

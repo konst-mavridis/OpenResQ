@@ -163,12 +163,18 @@ class ApiService {
   }
 
   Future<void> sendPushToken(String token) async {
+    final idToken = await FirebaseAuth.instance.currentUser!.getIdToken();
+
     await http.post(
-      Uri.parse("$baseUrl/report/push-token"),
-      headers: {"Content-Type": "application/json"},
+      Uri.parse("$baseUrl/push-token"),
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer $idToken",
+      },
       body: json.encode({"push_token": token}),
     );
   }
+
 
   // ---------------------------------------------------------
   // USER

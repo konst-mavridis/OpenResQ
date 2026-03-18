@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from app.schemas.hazard import HazardCreate
 from app.firebase_config import db
 from app.utils.verify import verify_token
-from app.utils.roles import role_required
+from app.utils.roles import require_roles
 from firebase_admin import firestore
 
 router = APIRouter(prefix="/hazards", tags=["hazards"])
@@ -11,7 +11,7 @@ router = APIRouter(prefix="/hazards", tags=["hazards"])
 def create_hazard(hazard: HazardCreate, user=Depends(verify_token)):
     doc_user = db.collection("users").document(user['uid']).get()
     user_role = doc_user.to_dict().get("role")
-    role_required(user_role, ["responder", "admin"])
+    require_roles(user_role, ["responder", "admin"])
     doc_ref = db.collection("hazards").document()
     doc_ref.set({
         "type": hazard.type,

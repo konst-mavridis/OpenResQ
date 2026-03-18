@@ -3,12 +3,13 @@ from datetime import datetime
 import logging
 from app.utils.ws_manager import ws_manager
 from datetime import datetime, timedelta, timezone
+from app.firebase_config import get_db
 
 logger = logging.getLogger(__name__)
 
 class ResponderService:
     def __init__(self):
-        self.db = firestore.client()
+        self.db = get_db()
 
     def list_responders(self):
         responders = self.db.collection("users")\

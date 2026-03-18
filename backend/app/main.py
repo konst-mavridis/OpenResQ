@@ -19,16 +19,21 @@ from app.routers.auth_routes import router as auth_router
 from app.routers.user_routes import router as user_router
 from app.routers.reports import router as reports_router
 from app.routers.alerts import router as alerts_router
-from app.routers import admin, responders
+from app.routers import admin
 from app.routers import admin_reports
 from app.utils.ws_manager import ws_manager
 from app.utils.logger import get_logger
 from app.routers import votes
 from app.routers import admin_analytics, admin_responders
 from app.routers import teams  # <--- add teams router import
+from app.routers import hazard
+from app.routers import report_archive
 from app.services.live_responders_service import start_responder_listener
 from app.services.duty_monitor_service import check_responder_activity
 from app.routers.responders import router as responders_router
+from app.routers.weather import router as weather_router
+from app.routers import admin_dispatch
+from app.routers import push_tokens
 # from services.fcm_service import send_push_to_token
 
 # Initialize logger
@@ -49,6 +54,13 @@ app = FastAPI(
 @repeat_every(seconds=300) # every 5 minutes 
 def monitor_responder_activity(): 
     check_responder_activity()
+
+@app.on_event("startup")
+@repeat_every(seconds=3600) # every hour
+def schedule_archive_reports():
+    from app.services.report_archiver import archive_old_reports as archive_fn
+    archive_fn()
+    return {"status": "ok", "message": "Archived old reports"}
 
 @app.on_event("startup")
 async def startup_event():
@@ -147,7 +159,11 @@ app.include_router(admin_analytics.router)
 app.include_router(admin_responders.router)
 app.include_router(teams.router)  # include teams endpoints
 app.include_router(responders_router)
-
+app.include_router(weather_router)
+app.include_router(hazard.router)
+app.include_router(report_archive.router)
+app.include_router(admin_dispatch.router)
+app.include_router(push_tokens.router)
 # ===== WebSocket Endpoint =====
 
 @app.websocket("/ws/updates")

@@ -3,11 +3,12 @@ from firebase_admin import firestore
 import logging
 from app.services.report_service import ReportService
 from datetime import datetime
+from app.firebase_config import get_db
 
 router = APIRouter(prefix="/responders", tags=["responders"])
 logger = logging.getLogger(__name__)
 service = ReportService()
-db = firestore.client()
+db = get_db()
 
 
 @router.post("/{uid}/on_duty")

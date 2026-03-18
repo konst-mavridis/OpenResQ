@@ -31,6 +31,9 @@ import requests
 import asyncio
 from ..services.trust_service import TrustService
 from ..services.user_service import UserRepository
+from typing import Optional
+from ..services.priority_service import get_service_priority
+
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/reports", tags=["Reports"])
@@ -152,6 +155,36 @@ def predict_fire_openai(image_url: str) -> dict:
     except Exception as e:
         print(f"[AI ERROR] OpenAI prediction failed: {e}")
         return {"fire": False, "confidence": 0.0} 
+
+def severity_score(sev: Optional[str]) -> int:
+    return {
+        "critical": 4,
+        "high": 3,
+        "medium": 2,
+        "low": 1,
+    }.get(sev or "", 0)
+
+
+def sort_reports_for_responder(reports, responder, lat, lng):
+    # π.χ. responder.service_id = "fire_department"
+    service_id = responder.service_id
+    priorities = get_service_priority(service_id)
+
+    def type_priority(event_type: Optional[str]) -> int:
+        return priorities.get(event_type or "", 999)
+
+    def dist(r):
+        return haversine_distance_km(lat, lng, r.latitude, r.longitude)
+
+    reports.sort(
+        key=lambda r: (
+            -severity_score(r.severity),
+            type_priority(r.event_type),
+            dist(r),
+        )
+    )
+    return reports
+
 
 @router.post("/", response_model=dict)
 async def create_report(data: CreateReport, user=Depends(verify_token)):
@@ -833,20 +866,29 @@ def suggest_for_responder(
     lat: float = Query(...),
     lng: float = Query(...)
 ):
+    # ---------------------------------------------------------
+    # 1) Load responder
+    # ---------------------------------------------------------
     user_ref = db.collection("users").document(responder_uid)
     user_doc = user_ref.get()
     if not user_doc.exists:
         raise HTTPException(404, "Responder not found")
 
     user = user_doc.to_dict()
+
     if user.get("role") != "responder":
         raise HTTPException(400, "User is not a responder")
+
     if not user.get("on_duty", False):
         raise HTTPException(400, "Responder is OFF DUTY")
 
+    # ---------------------------------------------------------
+    # 2) Prevent double assignment
+    # ---------------------------------------------------------
     if _has_active_report(responder_uid):
         return {"suggested": None}
 
+    # Cooldown 1 hour
     last_assigned_at = user.get("last_assigned_at")
     if last_assigned_at:
         if hasattr(last_assigned_at, "to_datetime"):
@@ -857,6 +899,23 @@ def suggest_for_responder(
         if datetime.datetime.utcnow() - last_dt < datetime.timedelta(hours=1):
             return {"suggested": None}
 
+    # ---------------------------------------------------------
+    # 3) Load service type priorities from Firestore
+    # ---------------------------------------------------------
+    service_id = user.get("service_id", "default")
+
+    pr_doc = db.collection("service_priorities").document(service_id).get()
+    if pr_doc.exists:
+        type_priorities = pr_doc.to_dict().get("priorities", {})
+    else:
+        type_priorities = {}  # fallback: no priorities configured
+
+    def get_type_priority(event_type: str):
+        return type_priorities.get(event_type, 999)
+
+    # ---------------------------------------------------------
+    # 4) Load candidate reports
+    # ---------------------------------------------------------
     reports = db.collection("reports") \
         .where("status", "in", ["pending", "unassigned"]) \
         .stream()
@@ -867,55 +926,84 @@ def suggest_for_responder(
         r = d.to_dict()
         r_id = d.id
 
+        # Skip rejected
         if responder_uid in r.get("rejected_by", []):
             continue
 
+        # Skip invalid coords
         r_lat = r.get("latitude")
         r_lng = r.get("longitude")
         if r_lat is None or r_lng is None:
             continue
 
+        # Distance
         dist = haversine_distance(lat, lng, r_lat, r_lng)
         if dist < 0.3:
             continue
 
-        sev = r.get("severity", 1)
+        # Severity
+        sev = r.get("severity", "low")
         if isinstance(sev, str):
-            sev_map = {"low": 1, "medium": 2, "high": 3}
+            sev_map = {"low": 1, "medium": 2, "high": 3, "critical": 4}
             severity = sev_map.get(sev.lower(), 1)
         else:
             severity = int(sev)
 
+        # Created at
         created_at = r.get("created_at") or datetime.datetime.utcnow()
         if hasattr(created_at, "to_datetime"):
             created_at = created_at.to_datetime()
+
+        # Event type
+        event_type = r.get("event_type", "unknown")
 
         candidates.append({
             "id": r_id,
             "severity": severity,
             "distance": dist,
             "created_at": created_at,
+            "event_type": event_type,
+            "type_priority": get_type_priority(event_type),
             "data": r
         })
 
     if not candidates:
         return {"suggested": None}
 
+    # ---------------------------------------------------------
+    # 5) SORTING LOGIC:
+    #    1) severity DESC
+    #    2) type priority ASC
+    #    3) distance ASC
+    #    4) created_at DESC
+    # ---------------------------------------------------------
     candidates.sort(
-        key=lambda x: (-x["severity"], x["distance"], -x["created_at"].timestamp())
+        key=lambda x: (
+            -x["severity"],
+            x["type_priority"],
+            x["distance"],
+            -x["created_at"].timestamp()
+        )
     )
 
     best = candidates[0]
     report_id = best["id"]
 
+    # ---------------------------------------------------------
+    # 6) Mark report on hold
+    # ---------------------------------------------------------
     db.collection("reports").document(report_id).update({
         "on_hold_for": responder_uid,
         "on_hold_at": datetime.datetime.utcnow()
     })
 
     best["data"]["id"] = report_id
-    return {"suggested": best["data"]}
 
+    return {
+        "suggested": best["data"],
+        "used_priorities": type_priorities,
+        "service_id": service_id
+    }
 
 @router.post("/{report_id}/accept_suggest")
 def accept_suggest(

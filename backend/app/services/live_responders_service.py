@@ -1,7 +1,8 @@
 from firebase_admin import firestore
 from app.utils.ws_manager import ws_manager
+from app.firebase_config import get_db
 
-db = firestore.client()
+db = get_db()
 
 def start_responder_listener():
     def on_snapshot(col_snapshot, changes, timestamp):

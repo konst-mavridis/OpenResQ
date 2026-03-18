@@ -1,8 +1,9 @@
 from firebase_admin import firestore
 from datetime import datetime, timedelta
+from app.firebase_config import get_db
 from app.utils.ws_manager import ws_manager
 
-db = firestore.client()
+db = get_db()
 
 def check_responder_activity():
     now = datetime.utcnow()

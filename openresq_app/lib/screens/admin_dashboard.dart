@@ -13,7 +13,7 @@ import '../widgets/responder_tile.dart';
 import '../widgets/add_responder_dial.dart';
 import '../screens/admin_requests_screen.dart';
 import '../screens/logs_screen.dart';
-
+import '../screens/admin_service_priority.dart';
 class AdminDashboardPage extends StatefulWidget {
   const AdminDashboardPage({super.key});
 
@@ -367,7 +367,86 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
               },
             ),
 
-            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.tune),
+              title: const Text("Teams Priorities"),
+              onTap: () async {
+                Navigator.pop(context);
+
+                if (_adminLocation == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Admin location not available")),
+                  );
+                  return;
+                }
+
+                // Load teams from Firestore
+                final snap = await FirebaseFirestore.instance
+                    .collection("teams")
+                    .get();
+
+                final distance = Distance();
+                final List<Map<String, dynamic>> teams = [];
+
+                for (var doc in snap.docs) {
+                  final data = doc.data();
+                  final lat = data["area"]?["latitude"];
+                  final lng = data["area"]?["longitude"];
+
+                  if (lat != null && lng != null) {
+                    final dist = distance(
+                      _adminLocation!,
+                      LatLng(lat.toDouble(), lng.toDouble()),
+                    );
+
+                    if (dist <= 25000) { // 25 km radius
+                      teams.add({
+                        "id": doc.id,
+                        "name": data["name"] ?? "Unnamed Team",
+                        "distance": dist,
+                      });
+                    }
+                  }
+                }
+
+                if (teams.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("No teams found in your area")),
+                  );
+                  return;
+                }
+
+                // Sort by distance
+                teams.sort((a, b) => a["distance"].compareTo(b["distance"]));
+
+                // Show dialog
+                final selected = await showDialog<Map<String, dynamic>>(
+                  context: context,
+                  builder: (_) => SimpleDialog(
+                    title: const Text("Select Team"),
+                    children: teams.map((t) {
+                      return SimpleDialogOption(
+                        onPressed: () => Navigator.pop(context, t),
+                        child: Text("${t["name"]} (${(t["distance"] / 1000).toStringAsFixed(1)} km)"),
+                      );
+                    }).toList(),
+                  ),
+                );
+
+                if (selected != null && context.mounted) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AdminServicePriorityScreen(
+                        serviceId: selected["id"],
+                        serviceName: selected["name"],
+                      ),
+                    ),
+                  );
+                }
+              },
+            ),
+           const Divider(),
 
             ListTile(
               leading: const Icon(Icons.logout),
