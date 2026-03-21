@@ -103,8 +103,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   // -----------------------------
   // LIVE RESPONDERS (WEBSOCKET)
   // -----------------------------
-  void _startResponderStream() {
-    _responderStream = liveResponders.connect().listen((event) {
+  void _startResponderStream() async {
+    final stream = await liveResponders.connect();
+    _responderStream = stream.listen((event) {
       final type = event["type"];
       final data = event["data"];
 

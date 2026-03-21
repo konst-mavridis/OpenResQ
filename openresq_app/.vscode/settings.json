@@ -1,5 +1,5 @@
 {
-    "cmake.sourceDirectory": "C:/Users/user/Desktop/OpenResQ/openresq_app/windows",
-    "dart.flutterSdkPath": "C:\\flutter",
+    "cmake.sourceDirectory": "/Users/kmavridis/Desktop/OpenResQ/openresq_app/linux",
+    "dart.flutterSdkPath": "/Users/kmavridis/Documents/flutter",
     "java.configuration.updateBuildConfiguration": "interactive"
 }
