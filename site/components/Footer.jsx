@@ -5,7 +5,7 @@ import { useState } from "react";
 
 export default function Footer() {
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState(null); // null | 'loading' | 'success' | 'error'
+  const [status, setStatus] = useState(null);
   const [message, setMessage] = useState("");
 
   async function handleSubmit(e) {
@@ -24,122 +24,102 @@ export default function Footer() {
 
       if (!res.ok) {
         setStatus("error");
-        setMessage(data.error || data.message || "Subscription failed");
+        setMessage(data.error || "Subscription failed");
         return;
       }
 
       setStatus("success");
       setMessage(data.message || "Subscribed successfully");
       setEmail("");
-    } catch (err) {
+    } catch {
       setStatus("error");
       setMessage("Something went wrong. Please try again.");
     }
   }
 
   return (
-    <footer className="bg-white text-gray-900">
-      <div className="max-w-7xl mx-auto px-4 sm:px-8 py-12 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
+    <footer className="bg-neutral-50 dark:bg-neutral-900 text-neutral-800 dark:text-neutral-200 border-t border-neutral-200 dark:border-neutral-800">
+      <div className="max-w-7xl mx-auto px-6 py-16 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-12">
 
         {/* Brand */}
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
+          <h2 className="text-2xl font-semibold tracking-tight text-primary dark:text-primary-300">
             OpenResQ
           </h2>
-          <p className="text-sm text-gray-600">
-            An open, community-driven platform improving emergency
-            response through collaboration and transparency.
+          <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
+            A modern, community‑driven platform enhancing emergency response
+            through collaboration, transparency and innovation.
           </p>
         </div>
 
-        {/* Site Links */}
+        {/* Platform Links */}
         <div>
-          <h3 className="text-sm font-semibold text-gray-900 mb-4 uppercase">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400 mb-4">
             Platform
           </h3>
           <ul className="space-y-2 text-sm">
-            <li><Link href="/mission" className="hover:text-gray-900">Mission</Link></li>
-            <li><Link href="/platform" className="hover:text-gray-900">Platform</Link></li>
-            <li><Link href="/how-it-works" className="hover:text-gray-900">How it works</Link></li>
-            <li><Link href="/community" className="hover:text-gray-900">Community</Link></li>
-            <li><Link href="/join" className="hover:text-gray-900">Get involved</Link></li>
+            <li><Link href="/mission" className="hover:text-primary">Mission</Link></li>
+            <li><Link href="/platform" className="hover:text-primary">Platform</Link></li>
+            <li><Link href="/how-it-works" className="hover:text-primary">How it works</Link></li>
+            <li><Link href="/community" className="hover:text-primary">Community</Link></li>
+            <li><Link href="/join" className="hover:text-primary">Get involved</Link></li>
           </ul>
         </div>
 
-        {/* Community / Social */}
+        {/* Community */}
         <div>
-          <h3 className="text-sm font-semibold text-gray-900 mb-4 uppercase">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400 mb-4">
             Community
           </h3>
           <ul className="space-y-2 text-sm">
-            <li>
-              <a href="https://github.com/" target="_blank" className="hover:text-blue-600">
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://twitter.com/" target="_blank" className="hover:text-blue-600">
-                X (Twitter)
-              </a>
-            </li>
-            <li>
-              <a href="https://linkedin.com/" target="_blank" className="hover:text-blue-600">
-                LinkedIn
-              </a>
-            </li>
-            <li>
-              <a href="mailto:contact@openresq.org" className="hover:text-blue-600">
-                Contact
-              </a>
-            </li>
+            <li><a href="https://github.com" target="_blank" className="hover:text-primary">GitHub</a></li>
+            <li><a href="https://twitter.com" target="_blank" className="hover:text-primary">X (Twitter)</a></li>
+            <li><a href="https://linkedin.com" target="_blank" className="hover:text-primary">LinkedIn</a></li>
+            <li><a href="mailto:contact@openresq.org" className="hover:text-primary">Contact</a></li>
           </ul>
         </div>
 
         {/* Newsletter */}
         <div>
-          <h3 className="text-sm font-semibold text-white mb-4 uppercase">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400 mb-4">
             Newsletter
           </h3>
-          <p className="text-sm text-gray-600 mb-4">
-            Stay informed about updates, partnerships and releases.
+          <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+            Stay informed about updates, releases and partnerships.
           </p>
 
-          <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
-            <label htmlFor="newsletter-email" className="sr-only">Email address</label>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
             <input
-              id="newsletter-email"
-              name="email"
               type="email"
               placeholder="Your email address"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-4 py-2 rounded bg-white border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+              className="w-full px-4 py-2 rounded-lg bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-sm focus:ring-2 focus:ring-primary focus:outline-none"
             />
-            <div className="flex items-center gap-3">
-              <button
-                type="submit"
-                disabled={status === "loading"}
-                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2 px-4 rounded transition disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {status === "loading" ? "Subscribing..." : "Subscribe"}
-              </button>
-              {status === "success" && (
-                <p className="text-sm text-green-600">{message}</p>
-              )}
-              {status === "error" && (
-                <p className="text-sm text-red-600">{message}</p>
-              )}
-            </div>
+
+            <button
+              type="submit"
+              disabled={status === "loading"}
+              className="bg-primary text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-700 transition disabled:opacity-60"
+            >
+              {status === "loading" ? "Subscribing..." : "Subscribe"}
+            </button>
+
+            {status === "success" && (
+              <p className="text-sm text-green-600 dark:text-green-400">{message}</p>
+            )}
+            {status === "error" && (
+              <p className="text-sm text-red-600 dark:text-red-400">{message}</p>
+            )}
           </form>
         </div>
       </div>
 
-      {/* Bottom bar */}
-      <div className="border-t border-gray-200 py-6 text-center text-sm text-gray-500">
-        © {new Date().getFullYear()} OpenResQ. All rights reserved. ·
-        <Link href="/privacy" className="ml-2 hover:text-blue-600">Privacy</Link> ·
-        <Link href="/terms" className="ml-2 hover:text-blue-600">Terms</Link>
+      <div className="border-t border-neutral-200 dark:border-neutral-800 py-6 text-center text-sm text-neutral-500 dark:text-neutral-400">
+        © {new Date().getFullYear()} OpenResQ ·
+        <Link href="/privacy" className="ml-2 hover:text-primary">Privacy</Link> ·
+        <Link href="/terms" className="ml-2 hover:text-primary">Terms</Link>
       </div>
     </footer>
   );
