@@ -7,7 +7,7 @@ class WSService {
 
   void connect() {
     try {
-      _channel = WebSocketChannel.connect(Uri.parse("ws://10.0.2.2:8000/ws/updates"));
+      _channel = WebSocketChannel.connect(Uri.parse("ws://openresq.onrender.com/ws/updates"));
       _channel!.stream.listen((message) {
         try {
           final data = jsonDecode(message);

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'firebase_options.dart';
 import 'screens/auth_gate.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -12,6 +13,13 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // App Check debug provider so App Check protected endpoints work in dev mode.
+  await FirebaseAppCheck.instance.activate(
+    androidProvider: AndroidProvider.debug,
+    appleProvider: AppleProvider.debug,
+  );
+
   FirebaseMessaging messaging = FirebaseMessaging.instance;
   await messaging.requestPermission(
     alert: true,

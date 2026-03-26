@@ -104,23 +104,25 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   // LIVE RESPONDERS (WEBSOCKET)
   // -----------------------------
   void _startResponderStream() {
-    _responderStream = liveResponders.connect().listen((event) {
-      final type = event["type"];
-      final data = event["data"];
+    liveResponders.connect().then((stream) {
+      _responderStream = stream.listen((event) {
+        final type = event["type"];
+        final data = event["data"];
 
-      if (type == "responder_status" ||
-          type == "responder_moved" ||
-          type == "responder_added") {
-        _updateResponderCircle(data);
-      }
+        if (type == "responder_status" ||
+            type == "responder_moved" ||
+            type == "responder_added") {
+          _updateResponderCircle(data);
+        }
 
-      if (type == "responder_removed") {
-        responderCircles.removeWhere(
-          (c) => c.key == ValueKey(event["uid"]),
-        );
-      }
+        if (type == "responder_removed") {
+          responderCircles.removeWhere(
+            (c) => c.key == ValueKey(event["uid"]),
+          );
+        }
 
-      setState(() {});
+        setState(() {});
+      });
     });
   }
 
@@ -144,7 +146,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       key: ValueKey(r["uid"]),
       point: LatLng(lat.toDouble(), lng.toDouble()),
       radius: 8,
-      color: color.withOpacity(0.9),
+      color: color.withValues(alpha: 0.9),
       borderStrokeWidth: 2,
       borderColor: Colors.white,
     );
@@ -292,7 +294,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
             icon: const Icon(Icons.logout),
             onPressed: () async {
               await FirebaseAuth.instance.signOut();
-              if (!mounted) return;
+              if (!context.mounted) return;
               Navigator.pushNamedAndRemoveUntil(
                 context,
                 '/',
@@ -501,7 +503,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                         CircleMarker(
                           point: _adminLocation!,
                           radius: 10,
-                          color: Colors.red.withOpacity(0.9),
+                          color: Colors.red.withValues(alpha: 0.9),
                           borderStrokeWidth: 2,
                           borderColor: Colors.white,
                         ),
@@ -575,3 +577,5 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     );
   }
 }
+
+

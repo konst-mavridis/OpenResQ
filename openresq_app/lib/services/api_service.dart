@@ -4,14 +4,20 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:uuid/uuid.dart';
 
 class ApiService {
-  final String baseUrl = "http://10.0.2.2:8000";
+  final String baseUrl = "https://openresq.onrender.com";
 
   Future<String> _getToken() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) throw Exception('User not authenticated');
+    if (user == null) {
+      throw Exception('User not authenticated');
+    }
 
-    final token = await user.getIdToken();
-    if (token == null) throw Exception('Token is null');
+    final token = await user.getIdToken(true); // Force refresh
+    if (token == null || token.isEmpty) {
+      // token could fail to issue; log details and force re-login
+      print('ApiService: fetched token is empty');
+      throw Exception('Token is null or empty');
+    }
 
     return token;
   }
@@ -38,7 +44,9 @@ class ApiService {
     final headers = await _authHeaders();
     final res = await http.get(Uri.parse('$baseUrl/reports/nearby'), headers: headers);
     if (res.statusCode == 200) return jsonDecode(res.body);
-    throw Exception(res.body);
+
+    final body = res.body.isNotEmpty ? res.body : 'Status ${res.statusCode}';
+    throw Exception('getNearbyReports failed: $body');
   }
 
   Future<List<dynamic>> getAllReports() async {
@@ -218,7 +226,10 @@ class ApiService {
       headers: headers,
     );
 
-    if (res.statusCode != 200) throw Exception(res.body);
+    if (res.statusCode != 200) {
+      final body = res.body.isNotEmpty ? res.body : 'Status ${res.statusCode}';
+      throw Exception('updateMyArea failed: $body');
+    }
   }
 
   Future<void> resolveReport(String reportId, String uid) async {

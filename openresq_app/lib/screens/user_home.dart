@@ -39,9 +39,20 @@ class _UserHomePageState extends State<UserHomePage> {
   }
 
   Future<void> _init() async {
-    await _goToUserLocation();
-    _startLiveLocation();
-    await _loadReports();
+    try {
+      await _goToUserLocation();
+      _startLiveLocation();
+      await _loadReports();
+    } on Exception catch (e) {
+      debugPrint('UserHome init failed: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Initialization failed: ${e.toString()}')),
+      );
+      await FirebaseAuth.instance.signOut();
+      if (!mounted) return;
+      Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+    }
   }
 
   Future<void> _loadReports() async {
@@ -54,6 +65,17 @@ class _UserHomePageState extends State<UserHomePage> {
       _autoZoom();
     } catch (e) {
       debugPrint("Error loading reports: $e");
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not load reports: ${e.toString()}')),
+      );
+      // If auth failure, logout and reset.
+      if (e.toString().contains('Missing authentication token') ||
+          e.toString().contains('User not authenticated')) {
+        await FirebaseAuth.instance.signOut();
+        if (!mounted) return;
+        Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+      }
     }
   }
 
@@ -68,11 +90,17 @@ class _UserHomePageState extends State<UserHomePage> {
 
     _mapController.move(latLng, 14.5);
 
-    await api.updateMyArea(
-      latitude: pos.latitude,
-      longitude: pos.longitude,
-      radiusKm: 25,
-    );
+    try {
+      await api.updateMyArea(
+        latitude: pos.latitude,
+        longitude: pos.longitude,
+        radiusKm: 25,
+      );
+    } catch (e, st) {
+      debugPrint('updateMyArea failed: $e');
+      debugPrint('$st');
+      // For app flow, we can ignore it; user still gets map and reports.
+    }
   }
 
   void _startLiveLocation() {
