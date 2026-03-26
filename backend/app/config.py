@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     cors_origins: str = Field(default="*", env="CORS_ORIGINS")
     environment: str = Field(default="development", env="ENVIRONMENT")
     
+    # OpenAI
+    openai_api_key: str = Field(env="OPENAI_API_KEY")
+    
     class Config:
         env_file = ".env"
         case_sensitive = False

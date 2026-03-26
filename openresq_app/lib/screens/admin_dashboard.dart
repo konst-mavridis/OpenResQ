@@ -103,11 +103,19 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   // -----------------------------
   // LIVE RESPONDERS (WEBSOCKET)
   // -----------------------------
+<<<<<<< HEAD
   void _startResponderStream() {
     liveResponders.connect().then((stream) {
       _responderStream = stream.listen((event) {
         final type = event["type"];
         final data = event["data"];
+=======
+  void _startResponderStream() async {
+    final stream = await liveResponders.connect();
+    _responderStream = stream.listen((event) {
+      final type = event["type"];
+      final data = event["data"];
+>>>>>>> 9fe460a18c8a10c492e0613ea06414acabe534ee
 
         if (type == "responder_status" ||
             type == "responder_moved" ||

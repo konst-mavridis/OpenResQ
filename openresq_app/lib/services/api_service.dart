@@ -4,7 +4,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:uuid/uuid.dart';
 
 class ApiService {
+<<<<<<< HEAD
   final String baseUrl = "https://openresq.onrender.com";
+=======
+  final String baseUrl = "http://openresq.onrender.com";
+>>>>>>> 9fe460a18c8a10c492e0613ea06414acabe534ee
 
   Future<String> _getToken() async {
     final user = FirebaseAuth.instance.currentUser;
