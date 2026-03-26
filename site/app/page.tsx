@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
 
@@ -40,7 +41,7 @@ function useTypingLoop(text: string, speed = 120, pause = 1200) {
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    let timeout: any;
+    let timeout: NodeJS.Timeout;
 
     if (!deleting && index < text.length) {
       timeout = setTimeout(() => {
@@ -55,7 +56,7 @@ function useTypingLoop(text: string, speed = 120, pause = 1200) {
         setIndex(index - 1);
       }, speed / 1.5);
     } else if (deleting && index === 0) {
-      setDeleting(false);
+      timeout = setTimeout(() => setDeleting(false), speed);
     }
 
     return () => clearTimeout(timeout);
@@ -125,9 +126,11 @@ export default function Home() {
               viewport={{ once: true }}
               transition={{ duration: 0.5, delay: i * 0.2 }}
             >
-              <img
+              <Image
                 src={featureIllustrations[i]}
                 alt={title}
+                width={96}
+                height={96}
                 className="w-24 mx-auto mb-6 opacity-90"
               />
               <h3 className="text-2xl font-semibold text-center mb-4">
@@ -165,9 +168,11 @@ export default function Home() {
               viewport={{ once: true }}
               transition={{ duration: 0.5, delay: i * 0.2 }}
             >
-              <img
+              <Image
                 src={stepIllustrations[i]}
                 alt={step.title}
+                width={96}
+                height={96}
                 className="w-24 mx-auto mb-6"
               />
               <h3 className="text-xl font-semibold text-center mb-3">

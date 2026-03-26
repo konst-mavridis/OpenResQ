@@ -22,6 +22,7 @@ export default function Navbar() {
           <Link href="/how-it-works" className="hover:text-primary">How it works</Link>
           <Link href="/community" className="hover:text-primary">Community</Link>
           <Link href="/contact" className="hover:text-primary">Contact</Link>
+          <Link href="/partnerships" className="hover:text-primary">Partnerships</Link>
 
           <Link
             href="/join"
@@ -72,6 +73,8 @@ export default function Navbar() {
               <Link href="/how-it-works" onClick={() => setOpen(false)} className="hover:text-primary">How it works</Link>
               <Link href="/community" onClick={() => setOpen(false)} className="hover:text-primary">Community</Link>
               <Link href="/contact" onClick={() => setOpen(false)} className="hover:text-primary">Contact</Link>
+              <Link href="/partnerships" onClick={() => setOpen(false)} className="hover:text-primary">Partnerships</Link>
+
             </nav>
 
             <Link
