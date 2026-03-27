@@ -23,7 +23,7 @@ export default function Navbar() {
           <Link href="/community" className="hover:text-primary">Community</Link>
           <Link href="/contact" className="hover:text-primary">Contact</Link>
           <Link href="/partnerships" className="hover:text-primary">Partnerships</Link>
-
+          <Link href="/pricing" className="hover:text-primary">Pricing</Link>
           <Link
             href="/join"
             className="bg-primary text-white px-5 py-2 rounded-lg font-semibold hover:bg-primary-700 transition"
@@ -74,7 +74,7 @@ export default function Navbar() {
               <Link href="/community" onClick={() => setOpen(false)} className="hover:text-primary">Community</Link>
               <Link href="/contact" onClick={() => setOpen(false)} className="hover:text-primary">Contact</Link>
               <Link href="/partnerships" onClick={() => setOpen(false)} className="hover:text-primary">Partnerships</Link>
-
+              <Link href="/pricing" onClick={() => setOpen(false)} className="hover:text-primary">Pricing</Link>
             </nav>
 
             <Link

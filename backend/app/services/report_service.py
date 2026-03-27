@@ -271,6 +271,7 @@ class ReportService:
 
         except Exception as e:
             raise
+    
     def get_recent_reports(self, hours):
         """
         Επιστρέφει όλα τα reports που δημιουργήθηκαν τις τελευταίες `hours` ώρες.
