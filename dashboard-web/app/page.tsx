@@ -43,13 +43,13 @@ export default function DashboardHome() {
           <h1 className="text-3xl font-semibold">Dashboard</h1>
 
           <div className="grid md:grid-cols-4 gap-4">
-            <div className="bg-gray-900 border border-border rounded-xl p-4">
+            <div className="bg-(--background) border border-border rounded-xl p-4">
               <div className="text-sm text-foreground/60">Nearby Reports</div>
               <div className="text-2xl font-semibold">{reports.length}</div>
             </div>
           </div>
 
-          <div className="bg-gray-900 border border-border rounded-xl p-4 h-80">
+          <div className="bg-(--background) border border-border rounded-xl p-4 h-80">
             <div className="font-semibold mb-2">Map Overview</div>
 
             <div className="h-full">

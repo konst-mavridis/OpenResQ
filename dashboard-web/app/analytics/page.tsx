@@ -126,7 +126,7 @@ export default function AnalyticsPage() {
           <h1 className="text-2xl font-semibold">Analytics</h1>
 
           <div className="grid gap-6 md:grid-cols-2">
-            <div className="bg-gray-900 border border-border rounded-xl p-4">
+            <div className="bg-(--background) border border-border rounded-xl p-4">
               <div className="font-semibold mb-2">Incidents Over Time</div>
               {loading ? (
                 <div className="h-64 bg-neutral-100 rounded-lg flex items-center justify-center text-sm text-foreground/60">
@@ -154,7 +154,7 @@ export default function AnalyticsPage() {
               )}
             </div>
 
-            <div className="bg-gray-900 border border-border rounded-xl p-4 h-64">
+            <div className="bg-(--background) border border-border rounded-xl p-4 h-64">
               <div className="font-semibold mb-2">Average Resolve Time (hours)</div>
               {loading ? (
                 <div className="h-full bg-neutral-100 rounded-lg flex items-center justify-center text-sm text-foreground/60">
@@ -185,7 +185,7 @@ export default function AnalyticsPage() {
               )}
             </div>
 
-            <div className="bg-gray-900 border border-border rounded-xl p-4 md:col-span-2">
+            <div className="bg-(--background) border border-border rounded-xl p-4 md:col-span-2">
               <div className="flex items-center justify-between mb-3">
                 <div className="font-semibold">Heatmap by Month</div>
                 <select

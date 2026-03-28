@@ -5,11 +5,12 @@ from fastapi import APIRouter, Depends, HTTPException
 import logging
 from app.firebase_config import get_db, get_auth
 from app.utils.verify import verify_token
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/user", tags=["Users"])
-
+class ChangePasswordRequest(BaseModel):
+    new_password: str = Field(min_length=6)
 
 class ThemeUpdate(BaseModel):
     theme: str
@@ -97,22 +98,16 @@ async def set_user_theme(payload: ThemeUpdate, user=Depends(verify_token)):
         raise HTTPException(status_code=400, detail=str(e))
     
 #Change password endpoint
+
 @router.post("/change-password")
-async def change_password(new_password: str, user=Depends(verify_token)):
+async def change_password(payload: ChangePasswordRequest, user=Depends(verify_token)):
     try:
-        if len(new_password) < 6:
-            raise HTTPException(status_code=400, detail="Password must be at least 6 characters long")
-        
-        # Update password in Firebase Authentication
         auth = get_auth()
         uid = user.get("uid")
-        
         if not uid:
             raise HTTPException(status_code=400, detail="User ID not found in token")
-        
-        # Update the user's password
-        auth.update_user(uid, password=new_password)
-        
+
+        auth.update_user(uid, password=payload.new_password)
         logger.info(f"Password updated successfully for user {uid}")
         return {"message": "Password updated successfully"}
     except HTTPException:
