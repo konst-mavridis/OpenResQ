@@ -19,9 +19,9 @@ export default function DevicesPage() {
         <main className="p-8 space-y-6">
           <h1 className="text-2xl font-semibold">Devices</h1>
 
-          <div className="bg-white border border-border rounded-xl p-4">
+          <div className="bg-(--background) border border-border rounded-xl p-4">
             <table className="w-full text-sm">
-              <thead className="bg-neutral-50 border-b border-border">
+              <thead className="bg-(--background) border-b border-border">
                 <tr>
                   <th className="text-left px-4 py-2">ID</th>
                   <th className="text-left px-4 py-2">Type</th>

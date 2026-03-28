@@ -37,10 +37,10 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="h-screen flex items-center justify-center bg-neutral-100">
+    <div className="h-screen flex items-center justify-center bg-(--background)">
       <form
         onSubmit={handleLogin}
-        className="bg-white p-8 rounded-xl border border-border w-80 shadow-sm"
+        className="bg-(--background)p-8 rounded-xl border border-border w-80 shadow-sm"
       >
         <h1 className="text-xl font-semibold mb-4 text-center">Admin Login</h1>
 

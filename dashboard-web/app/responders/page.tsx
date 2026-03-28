@@ -59,9 +59,9 @@ export default function RespondersPage() {
           {loading && <p className="text-foreground/60">Loading…</p>}
 
           {!loading && (
-            <div className="bg-gray-900 border border-border rounded-xl p-4">
+            <div className="bg-(--background) border border-border rounded-xl p-4">
               <table className="w-full text-sm">
-                <thead className="bg-gray-900 border-b border-border">
+                <thead className="bg-(--background) border-b border-border">
                   <tr>
                     <th className="text-left px-4 py-2">Name</th>
                     <th className="text-left px-4 py-2">Email</th>

@@ -17,7 +17,7 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-64 bg-gray-900 border-r border-border p-6 flex flex-col">
+    <aside className="w-64 bg-(--background) border-r border-border p-6 flex flex-col">
       <div className="font-bold text-xl mb-8">OpenResQ</div>
 
       <nav className="space-y-2 flex-1">

@@ -19,7 +19,7 @@ export default function OrganizationsPage() {
         <main className="p-8 space-y-6">
           <h1 className="text-2xl font-semibold">Organizations</h1>
 
-          <div className="bg-white border border-border rounded-xl p-4">
+          <div className="bg-(--background) border border-border rounded-xl p-4">
             <table className="w-full text-sm">
               <thead className="bg-neutral-50 border-b border-border">
                 <tr>

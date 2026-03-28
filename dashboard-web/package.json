@@ -10,8 +10,10 @@
   },
   "dependencies": {
     "@googlemaps/markerclusterer": "^2.6.2",
+    "@opentelemetry/api": "^1.9.1",
     "@react-google-maps/api": "^2.20.8",
     "firebase": "^12.11.0",
+    "firebase-admin": "^13.7.0",
     "lucide-react": "^1.7.0",
     "next": "16.2.1",
     "react": "19.2.4",

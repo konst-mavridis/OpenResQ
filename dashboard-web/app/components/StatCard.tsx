@@ -8,7 +8,7 @@ export default function StatCard({
   sub?: string;
 }) {
   return (
-    <div className="bg-white border border-border rounded-xl p-4 shadow-sm">
+    <div className="bg-(--background) border border-border rounded-xl p-4 shadow-sm">
       <div className="text-sm text-foreground/60">{label}</div>
       <div className="text-2xl font-semibold mt-1">{value}</div>
       {sub && <div className="text-xs text-foreground/60 mt-1">{sub}</div>}
