@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { auth } from "../lib/firebase";
+import { apiPost, apiDelete } from "../lib/api";
 import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
 
@@ -62,14 +63,7 @@ export default function SettingsPage() {
 
     try {
       const token = await auth.currentUser?.getIdToken();
-      await fetch("${process.env.NEXT_PUBLIC_API_BASE_URL}/user/theme", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ theme: newTheme }),
-      });
+      await apiPost("/user/theme", { theme: newTheme }, token);
     } catch (error) {
       console.error("Error saving theme:", error);
     }
@@ -84,14 +78,7 @@ export default function SettingsPage() {
       if (password) updates.password = password;
 
       if (Object.keys(updates).length > 0) {
-        await fetch("${process.env.NEXT_PUBLIC_API_BASE_URL}/user/change", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(updates),
-        });
+        await apiPost("/user/change-password", updates, token);
         alert("Account updated successfully");
         setPassword("");
       }
@@ -111,12 +98,7 @@ export default function SettingsPage() {
     setLoading(true);
     try {
       const token = await auth.currentUser?.getIdToken();
-      await fetch("/user/delete", {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      await apiDelete("/user/delete", token);
       alert("Account deleted successfully");
       // Redirect to login or home
       window.location.href = "/login";

@@ -5,10 +5,15 @@ from fastapi import APIRouter, Depends, HTTPException
 import logging
 from app.firebase_config import get_db, get_auth
 from app.utils.verify import verify_token
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/user", tags=["Users"])
 
+
+class ThemeUpdate(BaseModel):
+    theme: str
+    
 
 @router.get("/me")
 async def get_user_profile(user=Depends(verify_token)):
@@ -75,8 +80,9 @@ async def delete_user(user=Depends(verify_token)):
     
 # Store user theme preference
 @router.post("/theme")
-async def set_user_theme(theme: str, user=Depends(verify_token)):
+async def set_user_theme(payload: ThemeUpdate, user=Depends(verify_token)):
     try:
+        theme = payload.theme
         if theme not in ["light", "dark"]:
             raise HTTPException(status_code=400, detail="Theme must be 'light' or 'dark'")
         
