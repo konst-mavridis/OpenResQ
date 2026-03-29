@@ -19,34 +19,27 @@
 }
 
 /* ===========================
-   LIGHT MODE
+   LIGHT MODE (default)
    =========================== */
-.light {
+:root {
   --background: #ffffff;
   --foreground: #171717;
   --color-border: #e5e7eb;
   --color-primary: #2563eb;
+  --sidebar-active: #e5e7eb; /* grayish active state for light mode */
+  --sidebar-hover: #f3f4f6;
 }
 
 /* ===========================
-   DARK MODE
+   DARK MODE (class-based)
    =========================== */
-.dark {
+:root.dark {
   --background: #0a0a0a;
   --foreground: #ededed;
   --color-border: #333333;
   --color-primary: #60a5fa;
-}
-
-/* ===========================
-   SYSTEM DARK OVERRIDE
-   =========================== */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    --color-border: #333333;
-  }
+  --sidebar-active: #262626; /* dark gray active state for dark mode */
+  --sidebar-hover: #171717;
 }
 
 /* ===========================

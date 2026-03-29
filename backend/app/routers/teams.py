@@ -46,6 +46,7 @@ def get_nearby_teams(lat: float, lng: float, radius_km: float = 25):
     for doc in teams_ref: 
         data = doc.to_dict() 
         team_id = doc.id 
+        
         # 1) Προτεραιότητα: χρήση πεδίου area αν υπάρχει 
         area = data.get("area") or {}
         team_lat = area.get("latitude") or area.get("lat")
@@ -56,21 +57,29 @@ def get_nearby_teams(lat: float, lng: float, radius_km: float = 25):
             team_lat = team_lat or data.get("latitude")
             team_lng = team_lng or data.get("longitude")
 
-        # 3) Τελική ευκαιρία: πάρε το location του ηγέτη 
-        if team_lat is None or team_lng is None: 
-            leader_uid = data.get("leader_uid") 
-            if leader_uid: 
-                leader_doc = db.collection("users").document(leader_uid).get() 
-                if leader_doc.exists: 
-                    leader_data = leader_doc.to_dict() 
+        # ----- NEW: FETCH LEADER INFO (To get the Name and Fallback Location) -----
+        leader_name = None
+        leader_uid = data.get("leader_uid") 
+        if leader_uid: 
+            leader_doc = db.collection("users").document(leader_uid).get() 
+            if leader_doc.exists: 
+                leader_data = leader_doc.to_dict() 
+                
+                # Automatically extract 'name', 'full_name' or 'username' depending on your schema setup
+                leader_name = leader_data.get("name") or leader_data.get("full_name") or leader_data.get("username")
+
+                # 3) Τελική ευκαιρία: πάρε το location του ηγέτη 
+                if team_lat is None or team_lng is None: 
                     loc = leader_data.get("location") 
                     if loc: 
                         team_lat = loc.get("lat") 
                         team_lng = loc.get("lng") 
-        # 3) Αν ακόμα δεν έχουμε location → skip 
+
+        # 4) Αν ακόμα δεν έχουμε location → skip 
         if team_lat is None or team_lng is None: 
             continue 
-        # 4) Υπολόγισε απόσταση 
+
+        # 5) Υπολόγισε απόσταση 
         dist = haversine_distance_km(lat, lng, team_lat, team_lng) 
         if dist <= radius_km: 
             nearby.append({ 
@@ -78,7 +87,9 @@ def get_nearby_teams(lat: float, lng: float, radius_km: float = 25):
                 "name": data.get("name", "Unnamed Team"), 
                 "latitude": team_lat, 
                 "longitude": team_lng, 
-                "distance_km": round(dist, 2) }) 
+                "distance_km": round(dist, 2),
+                "leader_name": leader_name  # <- Injected perfectly here!
+            }) 
     return nearby
 
 @router.post("/join_request") 

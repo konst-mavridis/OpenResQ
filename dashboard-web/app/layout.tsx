@@ -3,12 +3,22 @@
 
 import "./globals.css";
 import type { ReactNode } from "react";
+import { ThemeProvider } from "./lib/ThemeContext";
+import { getThemeScript } from "./lib/theme-script";
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{ __html: getThemeScript() }}
+          suppressHydrationWarning
+        />
+      </head>
       <body>
-        <AuthWrapper>{children}</AuthWrapper>
+        <ThemeProvider>
+          <AuthWrapper>{children}</AuthWrapper>
+        </ThemeProvider>
       </body>
     </html>
   );

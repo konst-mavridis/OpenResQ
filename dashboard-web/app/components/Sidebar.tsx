@@ -7,7 +7,7 @@ const links = [
   { href: "/", label: "Dashboard" },
   { href: "/incidents", label: "Incidents" },
   { href: "/responders", label: "Responders" },
-  { href: "/organizations", label: "Teams" }, // TODO: create a system that has multiple teams into one organization.
+  { href: "/teams", label: "Teams" }, // TODO: create a system that has multiple teams into one organization.
   { href: "/analytics", label: "Analytics" },
   // { href: "/devices", label: "Devices" },
   { href: "/settings", label: "Settings" }, // TODO: this should be for user settings, not global settings. Global settings should be in a separate admin panel that only org admins can access. Also need to implement user roles and permissions. And adjust this to the teams-org system
@@ -29,8 +29,8 @@ export default function Sidebar() {
               href={link.href}
               className={`block rounded-lg px-3 py-2 text-sm ${
                 active
-                  ? "bg-primary text-white"
-                  : "text-foreground/80 hover:bg-neutral-100"
+                  ? "bg-(--sidebar-active) text-foreground font-medium"
+                  : "text-foreground/80 hover:bg-(--sidebar-hover)"
               }`}
             >
               {link.label}
