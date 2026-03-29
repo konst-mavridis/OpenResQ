@@ -12,6 +12,7 @@ router = APIRouter(prefix="/user", tags=["Users"])
 class ChangePasswordRequest(BaseModel):
     new_password: str = Field(min_length=6)
 
+
 class ThemeUpdate(BaseModel):
     theme: str
     
@@ -101,17 +102,6 @@ async def set_user_theme(payload: ThemeUpdate, user=Depends(verify_token)):
 
 @router.post("/change-password")
 async def change_password(payload: ChangePasswordRequest, user=Depends(verify_token)):
-    try:
-        auth = get_auth()
-        uid = user.get("uid")
-        if not uid:
-            raise HTTPException(status_code=400, detail="User ID not found in token")
-
-        auth.update_user(uid, password=payload.new_password)
-        logger.info(f"Password updated successfully for user {uid}")
-        return {"message": "Password updated successfully"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to change password: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+    auth = get_auth()
+    auth.update_user(user["uid"], password=payload.new_password)
+    return {"message": "Password updated successfully"}

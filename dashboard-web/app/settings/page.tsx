@@ -67,25 +67,30 @@ export default function SettingsPage() {
 
     try {
       const token = await auth.currentUser?.getIdToken();
-      await apiPost("/user/theme", { theme: newTheme }, token);
+      const backendTheme = newTheme === "system" ? getSystemTheme() : newTheme;
+      await apiPost("/user/theme", { theme: backendTheme }, token);
     } catch (error) {
       console.error("Error saving theme:", error);
     }
   };
 
   const handleSaveAccount = async () => {
+    if (email !== auth.currentUser?.email) {
+      alert("Email updates are not supported by the backend yet.");
+      return;
+    }
+
+    if (!password) {
+      return;
+    }
+
     setLoading(true);
     try {
       const token = await auth.currentUser?.getIdToken();
-      const updates: Record<string, string> = {};
-      if (email !== auth.currentUser?.email) updates.email = email;
-      if (password) updates.password = password;
+      await apiPost("/user/change-password", { new_password: password }, token);
 
-      if (Object.keys(updates).length > 0) {
-        await apiPost("/user/change-password", updates, token);
-        alert("Account updated successfully");
-        setPassword("");
-      }
+      alert("Password updated successfully");
+      setPassword("");
     } catch (error) {
       console.error("Error updating account:", error);
       alert("Error updating account");
