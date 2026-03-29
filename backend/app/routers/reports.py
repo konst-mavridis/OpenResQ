@@ -766,12 +766,15 @@ def resolve_report(
 
     report_ref.update({
         "status": "resolved",
+        "resolved_by": responder_uid,
         "resolved_at": datetime.datetime.utcnow(),
         "assignedTo": firestore.DELETE_FIELD,
         "assigned_at": firestore.DELETE_FIELD,
         "on_hold_for": firestore.DELETE_FIELD,
         "on_hold_at": firestore.DELETE_FIELD
     })
+
+    _increment_stats(responder_uid, "incidents_resolved")
 
     return {"status": "resolved", "report_id": report_id}
 
