@@ -66,7 +66,7 @@ def get_nearby_teams(lat: float, lng: float, radius_km: float = 25):
                 leader_data = leader_doc.to_dict() 
                 
                 # Automatically extract 'name', 'full_name' or 'username' depending on your schema setup
-                leader_name = leader_data.get("name") or leader_data.get("full_name") or leader_data.get("username")
+                leader_name = leader_data.get("display_name") or leader_data.get("displayName")
 
                 # 3) Τελική ευκαιρία: πάρε το location του ηγέτη 
                 if team_lat is None or team_lng is None: 

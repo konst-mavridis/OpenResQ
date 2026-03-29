@@ -10,7 +10,8 @@ import Link from "next/link"; // added Link import
 
 interface Team {
   id: string;
-  name: string;
+  display_name: string;
+  displayName: string;
   latitude: number | string;
   longitude: number | string;
   distance_km: number;
