@@ -13,6 +13,14 @@ export async function login(email: string, password: string) {
 }
 
 export async function logout() {
-  await apiPost("/auth/logout", {});
+  const user = auth.currentUser;
+  if (user) {
+    try {
+      const token = await user.getIdToken();
+      await apiPost("/auth/logout", {}, token);
+    } catch (error) {
+      console.error("Failed to notify backend about logout", error);
+    }
+  }
   await signOut(auth);
 }

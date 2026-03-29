@@ -46,7 +46,7 @@ def register_user(data: RegisterUser):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/auth/me")
+@router.get("/me")
 def get_current_user(user=Depends(verify_token)):
     return user
 
@@ -254,3 +254,12 @@ async def resend_otp(body: OTPRequest):
     send_email(email, "OpenResQ Email Verification", html)
 
     return {"success": True}
+
+# Logout endpoint (client should delete token, but we can also revoke it server-side)
+@router.post("/logout")
+async def logout(user=Depends(verify_token)):
+    try:
+        fb_auth.revoke_refresh_tokens(user["uid"])
+        return {"message": "Logged out successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Logout failed: {e}")
