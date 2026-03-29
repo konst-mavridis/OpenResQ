@@ -10,8 +10,9 @@ import Link from "next/link"; // added Link import
 
 interface Team {
   id: string;
-  display_name: string;
-  displayName: string;
+  name?: string;
+  display_name?: string;
+  displayName?: string;
   latitude: number | string;
   longitude: number | string;
   distance_km: number;
@@ -115,7 +116,7 @@ export default function TeamsPage() {
                   <tbody>
                     {teams.map((t) => (
                       <tr key={t.id} className="border-b border-border last:border-0 hover:bg-foreground/5 transition-colors">
-                        <td className="px-6 py-4 font-medium">{t.display_name || t.displayName || "Unknown Team"}</td>
+                        <td className="px-6 py-4 font-medium">{t.name || t.display_name || t.displayName || "Unknown Team"}</td>
                         <td className="px-6 py-4">{t.distance_km} km</td>
                         <td className="px-6 py-4 text-foreground/70">
                           {typeof t.latitude === 'number' ? t.latitude.toFixed(4) : t.latitude},{" "}
