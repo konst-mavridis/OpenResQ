@@ -111,7 +111,6 @@ def create_team(payload: CreateTeam, user=Depends(verify_token)):
     # Initialize the team with the creator as leader and selected members
     new_team_ref.set({
         "name": payload.name,
-        "displayName": payload.name,
         "leader_uid": leader_uid,
         "members": members,
         "latitude": payload.latitude,

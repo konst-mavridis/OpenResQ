@@ -69,9 +69,8 @@ export default function ManageTeamPage() {
       const token = await currentUser.getIdToken();
       
       // Expected backend endpoint: POST /teams/{id}/manage or /teams/{id}
-      // Note: we're using apiPost which maps to POST requests
       await apiPost(`/teams/${teamId}/manage`, {
-        name: name,
+        name: displayName,
         leader_uid: leaderUid
       }, token);
 
