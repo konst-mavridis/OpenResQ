@@ -144,17 +144,46 @@ export default function ManageTeamPage() {
 
                  <div className="flex flex-col space-y-2">
                    <label className="text-sm font-medium text-foreground/70">
-                     Leader UID
+                     Team Leader
                    </label>
-                   <input
-                     type="text"
-                     value={leaderUid}
-                     onChange={(e) => setLeaderUid(e.target.value)}
-                     className="border border-border rounded-lg px-3 py-2 bg-(--background) text-foreground text-sm"
-                     placeholder="ID of the user who leads this team"
-                   />
+                   
+                   <div className="border border-border rounded-lg overflow-hidden">
+                     {team?.members && team.members.length > 0 ? (
+                       <ul className="divide-y divide-border">
+                         {team.members.map((member) => (
+                           <li key={member.uid} className="flex items-center justify-between p-3 hover:bg-foreground/5 transition-colors">
+                             <div className="flex flex-col">
+                               <div className="flex items-center gap-2">
+                                 <span className="font-medium text-sm">{member.name}</span>
+                                 {leaderUid === member.uid && (
+                                   <span className="bg-(--color-primary) text-white text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wide">Leader</span>
+                                 )}
+                               </div>
+                               <span className="text-xs text-foreground/60">{member.uid}</span>
+                             </div>
+                             <button
+                               onClick={() => setLeaderUid(member.uid)}
+                               disabled={leaderUid === member.uid}
+                               className={`text-xs px-3 py-1.5 rounded-md font-medium transition-colors ${
+                                 leaderUid === member.uid 
+                                   ? 'bg-foreground/5 text-foreground/40 cursor-not-allowed hidden' 
+                                   : 'bg-foreground/10 hover:bg-foreground/20 text-foreground'
+                               }`}
+                             >
+                               Make Leader
+                             </button>
+                           </li>
+                         ))}
+                       </ul>
+                     ) : (
+                       <div className="p-4 text-center text-sm text-foreground/60">
+                         No members found in this team to promote.
+                       </div>
+                     )}
+                   </div>
+                   
                    <p className="text-xs text-foreground/50">
-                     The assigned leader will be able to view their members resolved incidents.
+                     The assigned leader will be able to manage this team.
                    </p>
                  </div>
                </div>

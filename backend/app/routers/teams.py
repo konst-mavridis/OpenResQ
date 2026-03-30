@@ -27,6 +27,14 @@ class ManageTeam(BaseModel):
     leader_uid: str
 
 
+class CreateTeam(BaseModel):
+    name: str
+    latitude: float
+    longitude: float
+    member_uids: list[str] = []
+    leader_uid: str | None = None
+
+
 def _get_user_display_name(user_data: dict) -> str:
     return (
         user_data.get("display_name")
@@ -60,6 +68,116 @@ def _get_user_incidents_resolved(user_doc, uid: str) -> int:
                 return int(value)
 
     return 0
+
+
+@router.post("/create")
+def create_team(payload: CreateTeam, user=Depends(verify_token)):
+    """Create a new team with the current user as leader and optional nearby responder members."""
+    current_uid = user.get("uid")
+    current_area = user.get("area", {})
+    
+    # Get nearby responders within 25km radius
+    nearby_responders = _get_nearby_responders(payload.latitude, payload.longitude, radius_km=25)
+    nearby_uids = [r["uid"] for r in nearby_responders]
+    
+    # Ensure creator is always included and is the default leader if not specified
+    if current_uid not in nearby_uids:
+        nearby_uids.insert(0, current_uid)
+    
+    # Initialize members list with creator
+    members = [current_uid]
+    
+    # Add selected members if provided and validate they exist nearby
+    if payload.member_uids:
+        for member_uid in payload.member_uids:
+            if member_uid not in nearby_uids:
+                raise HTTPException(status_code=400, detail=f"User {member_uid} is not in nearby responders list")
+            if member_uid not in members:
+                members.append(member_uid)
+    
+    # Set leader (default to creator if not specified)
+    leader_uid = payload.leader_uid or current_uid
+    
+    # Validate leader is in nearby responders or is creator
+    if leader_uid != current_uid and leader_uid not in nearby_uids:
+        raise HTTPException(status_code=400, detail=f"Leader {leader_uid} is not in nearby responders list")
+    
+    # Ensure leader is in members list
+    if leader_uid not in members:
+        members.append(leader_uid)
+    
+    new_team_ref = db.collection("teams").document()
+    
+    # Initialize the team with the creator as leader and selected members
+    new_team_ref.set({
+        "name": payload.name,
+        "displayName": payload.name,
+        "leader_uid": leader_uid,
+        "members": members,
+        "latitude": payload.latitude,
+        "longitude": payload.longitude,
+        "created_at": datetime.utcnow()
+    })
+    
+    # Bind the creator to their newly created team with leader role
+    db.collection("users").document(current_uid).update({
+        "team_id": new_team_ref.id,
+        "role": "team_leader"
+    })
+    
+    # Bind selected members to the team
+    for member_uid in members:
+        if member_uid != current_uid:
+            db.collection("users").document(member_uid).update({
+                "team_id": new_team_ref.id,
+                "role": "responder"
+            })
+    
+    logger.info(f"Team created: {new_team_ref.id} by {current_uid} with {len(members)} members")
+    
+    return {
+        "status": "team_created",
+        "team_id": new_team_ref.id,
+        "nearby_responders": nearby_responders
+    }
+
+
+def _get_nearby_responders(lat: float, lng: float, radius_km: float = 25) -> list:
+    """Fetch responders within the specified radius and return their details."""
+    responders = []
+    users_ref = db.collection("users").stream()
+    
+    for user_doc in users_ref:
+        user_data = user_doc.to_dict() or {}
+        user_role = user_data.get("role", "")
+        
+        # Only include responders and team leaders
+        if user_role not in ("responder", "team_leader"):
+            continue
+        
+        # Try to get user's location from area field
+        user_area = user_data.get("area") or {}
+        user_lat = user_area.get("latitude") or user_area.get("lat")
+        user_lng = user_area.get("longitude") or user_area.get("lng")
+        
+        # Skip if no location
+        if user_lat is None or user_lng is None:
+            continue
+        
+        # Calculate distance
+        distance = haversine_distance_km(lat, lng, user_lat, user_lng)
+        
+        if distance <= radius_km:
+            responders.append({
+                "uid": user_doc.id,
+                "name": _get_user_display_name(user_data),
+                "role": user_role,
+                "distance_km": round(distance, 2)
+            })
+    
+    # Sort by distance
+    responders.sort(key=lambda r: r["distance_km"])
+    return responders
 
 
 @router.get("/nearby") 

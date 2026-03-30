@@ -764,6 +764,7 @@ def resolve_report(
     if report.get("assignedTo") != responder_uid:
         raise HTTPException(400, "You are not assigned to this report")
 
+    # Update report status and metadata
     report_ref.update({
         "status": "resolved",
         "resolved_by": responder_uid,
@@ -774,7 +775,23 @@ def resolve_report(
         "on_hold_at": firestore.DELETE_FIELD
     })
 
-    _increment_stats(responder_uid, "incidents_resolved")
+    # Increment the user's resolved reports counter dynamically
+    user_ref = db.collection("users").document(responder_uid)
+    user_ref.update({
+        "incidents_resolved": firestore.Increment(1),
+        "resolved_reports": firestore.Increment(1)
+    })
+    
+    # Apply to dispatch_stats subcollection as fallback
+    stats_ref = user_ref.collection("stats").document("dispatch_stats")
+    if stats_ref.get().exists:
+        stats_ref.update({
+            "incidents_resolved": firestore.Increment(1)
+        })
+    else:
+        stats_ref.set({
+            "incidents_resolved": 1
+        })
 
     return {"status": "resolved", "report_id": report_id}
 
