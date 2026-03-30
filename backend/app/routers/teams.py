@@ -301,7 +301,7 @@ def manage_team(team_id: str, payload: ManageTeam, user=Depends(verify_token)):
     
     # Prepare update payload
     update_payload = {
-        "displayName": payload.display_name,
+        "name": payload.name,
     }
     
     # Handle leader change if needed
@@ -333,7 +333,7 @@ def manage_team(team_id: str, payload: ManageTeam, user=Depends(verify_token)):
     # Apply all updates to team
     team_ref.update(update_payload)
     
-    logger.info(f"Team {team_id} updated: displayName={payload.display_name}, leader={new_leader}")
+    logger.info(f"Team {team_id} updated: name={payload.name}, leader={new_leader}")
     
     return {"status": "team_updated", "team_id": team_id}
 

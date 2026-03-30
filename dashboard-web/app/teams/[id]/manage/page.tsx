@@ -71,7 +71,7 @@ export default function ManageTeamPage() {
       // Expected backend endpoint: POST /teams/{id}/manage or /teams/{id}
       // Note: we're using apiPost which maps to POST requests
       await apiPost(`/teams/${teamId}/manage`, {
-        display_name: displayName,
+        name: name,
         leader_uid: leaderUid
       }, token);
 
