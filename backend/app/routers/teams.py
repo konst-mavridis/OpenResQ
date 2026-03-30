@@ -294,7 +294,7 @@ def manage_team(team_id: str, payload: ManageTeam, user=Depends(verify_token)):
     
     # Check authorization: only current leader or admin can manage team
     current_uid = user.get("uid")
-    current_role = user.get("role")
+    current_role = str(user.get("role", "")).strip().lower()
     if current_uid != current_leader and current_role != "admin":
         raise HTTPException(status_code=403, detail="Only the team leader or admin can manage team settings")
     

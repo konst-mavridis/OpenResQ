@@ -46,6 +46,7 @@ def verify_token(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
         
         if user_doc.exists:
             user_data = user_doc.to_dict()
+            user_data["uid"] = uid
         else:
             # Create default user
             user_data = {
