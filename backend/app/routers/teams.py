@@ -23,7 +23,7 @@ class RejectJoin(BaseModel):
     request_id: str
 
 class ManageTeam(BaseModel):
-    display_name: str
+    name: str
     leader_uid: str
 
 
