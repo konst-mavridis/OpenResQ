@@ -14,6 +14,10 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    document.title = "Settings - OpenResQ";
+  }, []);
+
+  useEffect(() => {
     if (auth.currentUser) {
       setEmail(auth.currentUser.email || "");
     }

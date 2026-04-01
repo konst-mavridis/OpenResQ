@@ -12,6 +12,10 @@ import ReportsGoogleMap from "./components/GoogleMap";
 export default function DashboardHome() {
   const [reports, setReports] = useState([]);
 
+  useEffect(() => {
+    document.title = "Dashboard - OpenResQ";
+  }, []);
+
   async function loadReports() {
     try {
       const token = await auth.currentUser?.getIdToken();

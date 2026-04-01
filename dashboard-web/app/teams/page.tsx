@@ -24,6 +24,10 @@ export default function TeamsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    document.title = "Teams - OpenResQ";
+  }, []);
+
   const fetchTeams = async (user: User) => {
     try {
       setLoading(true);

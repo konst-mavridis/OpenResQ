@@ -2,6 +2,7 @@
 
 import { Bell } from "lucide-react";
 import { logout } from "../lib/auth";
+import { IoExitOutline } from "react-icons/io5";
 
 export default function Topbar() {
   return (
@@ -17,7 +18,7 @@ export default function Topbar() {
           onClick={logout}
           className="text-sm text-red-600 hover:underline"
         >
-          Logout
+          <IoExitOutline size={20} />
         </button>
       </div>
     </header>

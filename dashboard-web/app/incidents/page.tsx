@@ -21,6 +21,10 @@ export default function IncidentsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    document.title = "Incidents - OpenResQ";
+  }, []);
+
+  useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user: User | null) => {
       if (user) {
         loadIncidents();

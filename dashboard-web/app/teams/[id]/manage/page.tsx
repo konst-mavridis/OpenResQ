@@ -24,6 +24,11 @@ export default function ManageTeamPage() {
   const teamId = params.id as string;
   
   const [team, setTeam] = useState<TeamDetails | null>(null);
+
+  useEffect(() => {
+    const title = team?.displayName ? `Manage ${team.displayName} - OpenResQ` : "Manage Team - OpenResQ";
+    document.title = title;
+  }, [team?.displayName]);
   
   // Form states
   const [displayName, setDisplayName] = useState("");

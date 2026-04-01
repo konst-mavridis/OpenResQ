@@ -1,14 +1,16 @@
-import { auth } from "./firebase";
-import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { apiPost } from "./api";
+import { auth } from "./firebase";
+import { signInWithEmailAndPassword, signOut, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
+
+const googleProvider = new GoogleAuthProvider();
 
 export async function login(email: string, password: string) {
   const userCred = await signInWithEmailAndPassword(auth, email, password);
-  const token = await userCred.user.getIdToken();
+  return userCred.user;
+}
 
-  // ενημερώνουμε το FastAPI
-  await apiPost("/auth/login", { token });
-
+export async function loginWithGoogle() {
+  const userCred = await signInWithPopup(auth, googleProvider);
   return userCred.user;
 }
 
@@ -17,7 +19,7 @@ export async function logout() {
   if (user) {
     try {
       const token = await user.getIdToken();
-      await apiPost("/auth/logout", {}, token);
+      await apiPost("/logout", {}, token);
     } catch (error) {
       console.error("Failed to notify backend about logout", error);
     }

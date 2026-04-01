@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
 
@@ -10,6 +11,10 @@ const mockDevices = [
 ];
 
 export default function DevicesPage() {
+  useEffect(() => {
+    document.title = "Devices - OpenResQ";
+  }, []);
+
   return (
     <div className="flex h-full">
       <Sidebar />

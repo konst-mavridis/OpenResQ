@@ -22,6 +22,7 @@ interface TeamDetails {
   leader_uid: string;
   leader_name?: string;
   members: Member[];
+  name: string;
 }
 
 export default function TeamDetailsPage() {
@@ -31,6 +32,11 @@ export default function TeamDetailsPage() {
   const [team, setTeam] = useState<TeamDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const title = team?.displayName ? `${team.displayName} - OpenResQ` : "Team Details - OpenResQ";
+    document.title = title;
+  }, [team?.displayName]);
 
   const fetchTeamDetails = async (user: User) => {
     try {

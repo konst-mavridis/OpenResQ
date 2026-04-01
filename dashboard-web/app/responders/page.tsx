@@ -22,6 +22,10 @@ interface Responder {
 export default function RespondersPage() {
       const [responders, setResponders] = useState<Responder[]>([]);
       const [loading, setLoading] = useState(true);
+
+      useEffect(() => {
+        document.title = "Responders - OpenResQ";
+      }, []);
       useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user: User | null) => {
       if (user) {
