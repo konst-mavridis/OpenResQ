@@ -9,8 +9,8 @@ router = APIRouter(prefix="/admin/responders", tags=["Admin Responders"])
 service = ResponderService()
 logger = logging.getLogger(__name__)
 
-@router.get("/")
-def list_responders(admin=Depends(require_role("admin")), background_tasks: BackgroundTasks = None):
+@router.get("")
+def list_responders(user=Depends(require_role("admin", "team_leader")), background_tasks: BackgroundTasks = None):
     responders = service.list_responders()
     
     async def _broadcast():
