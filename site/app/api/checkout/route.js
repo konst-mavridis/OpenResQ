@@ -4,8 +4,10 @@ import Stripe from "stripe";
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export async function POST(req) {
+  console.log("Checkout API Hit");
   try {
-    const { planId, orgName, email, name } = await req.body ? await req.json() : {};
+    const body = await req.json();
+    const { planId, orgName, email, name } = body;
 
     const plans = {
       basic: {
