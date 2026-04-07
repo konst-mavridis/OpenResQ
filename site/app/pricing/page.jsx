@@ -65,44 +65,62 @@ export default function Pricing() {
           <div className="grid md:grid-cols-3 gap-8 mt-10">
 
             {/* Basic */}
-            <div className="bg-white border border-neutral-200 p-6 rounded-xl shadow-sm">
-              <h3 className="text-2xl font-semibold text-black mb-2">Basic —100€/month</h3>
+            <div className="bg-white border border-neutral-200 p-6 rounded-xl shadow-sm flex flex-col">
+              <h3 className="text-2xl font-semibold text-black mb-2">Basic — 100€/month</h3>
               <p className="text-black/70 leading-relaxed mb-4">
                 For small teams or volunteer groups.
               </p>
-              <ul className="space-y-2 text-black/80">
+              <ul className="space-y-2 text-black/80 flex-1 mb-8">
                 <li>• Basic dashboard access</li>
                 <li>• Incident viewing</li>
                 <li>• Limited responders</li>
               </ul>
+              <Link
+                href="/checkout?plan=basic"
+                className="w-full text-center bg-zinc-100 text-black font-semibold py-3 rounded-lg hover:bg-zinc-200 transition"
+              >
+                Get Started
+              </Link>
             </div>
 
             {/* Pro */}
-            <div className="bg-white border border-neutral-200 p-6 rounded-xl shadow-sm scale-[1.02]">
+            <div className="bg-white border border-neutral-200 p-6 rounded-xl shadow-sm scale-[1.02] flex flex-col border-primary/20 ring-1 ring-primary/5">
               <h3 className="text-2xl font-semibold text-black mb-2">Pro — 250€/month</h3>
               <p className="text-black/70 leading-relaxed mb-4">
                 Ideal for small municipalities or organized rescue teams.
               </p>
-              <ul className="space-y-2 text-black/80">
+              <ul className="space-y-2 text-black/80 flex-1 mb-8">
                 <li>• Real‑time updates</li>
                 <li>• Full incident management</li>
                 <li>• More users</li>
                 <li>• Basic analytics</li>
               </ul>
+              <Link
+                href="/checkout?plan=pro"
+                className="w-full text-center bg-primary text-white font-semibold py-3 rounded-lg hover:bg-zinc-800 transition"
+              >
+                Select Pro
+              </Link>
             </div>
 
             {/* Enterprise */}
-            <div className="bg-white border border-neutral-200 p-6 rounded-xl shadow-sm">
+            <div className="bg-white border border-neutral-200 p-6 rounded-xl shadow-sm flex flex-col">
               <h3 className="text-2xl font-semibold text-black mb-2">Enterprise — Contact us</h3>
               <p className="text-black/70 leading-relaxed mb-4">
                 For large organizations with advanced needs.
               </p>
-              <ul className="space-y-2 text-black/80">
+              <ul className="space-y-2 text-black/80 flex-1 mb-8">
                 <li>• Advanced analytics</li>
                 <li>• Incident prioritization</li>
                 <li>• Real‑time support</li>
                 <li>• Custom features & integrations</li>
               </ul>
+              <Link
+                href="/contact"
+                className="w-full text-center bg-zinc-100 text-black font-semibold py-3 rounded-lg hover:bg-zinc-200 transition"
+              >
+                Contact Sales
+              </Link>
             </div>
 
           </div>

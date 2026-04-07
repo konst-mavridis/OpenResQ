@@ -9,6 +9,7 @@ const links = [
   { href: "/responders", label: "Responders" },
   { href: "/teams", label: "Teams" }, // TODO: create a system that has multiple teams into one organization.
   { href: "/analytics", label: "Analytics" },
+  { href: "/billing", label: "Billing" },
   // { href: "/devices", label: "Devices" },
   { href: "/settings", label: "Settings" }, // TODO: this should be for user settings, not global settings. Global settings should be in a separate admin panel that only org admins can access. Also need to implement user roles and permissions. And adjust this to the teams-org system
 ];

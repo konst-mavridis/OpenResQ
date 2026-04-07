@@ -23,8 +23,10 @@ def list_responders(user=Depends(require_role("admin", "team_leader")), backgrou
         background_tasks.add_task(_broadcast)
     return responders
 
+from app.dependencies.subscription import check_responder_limit
+
 @router.post("/{uid}/add")
-def add_responder(uid: str, admin=Depends(require_role("admin")), background_tasks: BackgroundTasks = None):
+def add_responder(uid: str, admin=Depends(require_role("admin")), org=Depends(check_responder_limit), background_tasks: BackgroundTasks = None):
     service.add_responder(uid)
     
     async def _broadcast():

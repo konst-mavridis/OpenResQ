@@ -34,7 +34,8 @@ from app.routers.responders import router as responders_router
 from app.routers.weather import router as weather_router
 from app.routers import admin_dispatch
 from app.routers import push_tokens
-# from services.fcm_service import send_push_to_token
+from app.routers.billing import router as billing_router
+from app.routers.admin_billing import router as admin_billing_router
 
 # Initialize logger
 logger = get_logger(__name__)
@@ -164,6 +165,8 @@ app.include_router(hazard.router)
 app.include_router(report_archive.router)
 app.include_router(admin_dispatch.router)
 app.include_router(push_tokens.router)
+app.include_router(billing_router)
+app.include_router(admin_billing_router)
 # ===== WebSocket Endpoint =====
 
 @app.websocket("/ws/updates")
