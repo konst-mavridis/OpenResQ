@@ -14,11 +14,11 @@ const links = [
   { href: "/settings", label: "Settings" }, // TODO: this should be for user settings, not global settings. Global settings should be in a separate admin panel that only org admins can access. Also need to implement user roles and permissions. And adjust this to the teams-org system
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ className = "" }: { className?: string }) {
   const pathname = usePathname();
 
   return (
-    <aside className="w-64 bg-(--background) border-r border-border p-6 flex flex-col">
+    <aside className={`w-64 bg-(--background) border-r border-border p-6 flex flex-col ${className}`}>
       <div className="font-bold text-xl mb-8">OpenResQ</div>
 
       <nav className="space-y-2 flex-1">
