@@ -24,6 +24,7 @@ export default function Navbar() {
           <Link href="/contact" className="hover:text-primary">Contact</Link>
           <Link href="/partnerships" className="hover:text-primary">Partnerships</Link>
           <Link href="/pricing" className="hover:text-primary">Pricing</Link>
+          <Link href="/admin" className="text-gray-600 dark:text-gray-400 hover:text-primary text-xs">Admin</Link>
           <Link
             href="/join"
             className="bg-primary text-white px-5 py-2 rounded-lg font-semibold hover:bg-primary-700 transition"
@@ -75,6 +76,7 @@ export default function Navbar() {
               <Link href="/contact" onClick={() => setOpen(false)} className="hover:text-primary">Contact</Link>
               <Link href="/partnerships" onClick={() => setOpen(false)} className="hover:text-primary">Partnerships</Link>
               <Link href="/pricing" onClick={() => setOpen(false)} className="hover:text-primary">Pricing</Link>
+              <Link href="/admin" onClick={() => setOpen(false)} className="hover:text-primary">Admin</Link>
             </nav>
 
             <Link

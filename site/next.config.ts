@@ -11,6 +11,28 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  redirects: async () => [
+    {
+      source: '/admin',
+      destination: 'https://dashboard.openresq.org',
+      permanent: false,
+    },
+    {
+      source: '/admin/:path*',
+      destination: 'https://dashboard.openresq.org/:path*',
+      permanent: false,
+    },
+    {
+      source: '/dashboard',
+      destination: 'https://dashboard.openresq.org',
+      permanent: false,
+    },
+    {
+      source: '/dashboard/:path*',
+      destination: 'https://dashboard.openresq.org/:path*',
+      permanent: false,
+    },
+  ],
 };
 
 export default nextConfig;
