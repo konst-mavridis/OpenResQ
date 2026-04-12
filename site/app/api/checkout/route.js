@@ -79,6 +79,8 @@ async function sendWelcomeEmail(email, name, orgName) {
     return false;
   }
 }
+
+export async function POST(req) {
   console.log("Checkout API Hit");
   try {
     const body = await req.json();
@@ -136,3 +138,4 @@ async function sendWelcomeEmail(email, name, orgName) {
     console.error("Stripe Error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
+}
