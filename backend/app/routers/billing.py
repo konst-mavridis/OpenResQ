@@ -1,13 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Header
 from app.dependencies.auth import get_current_user
 from app.dependencies.subscription import get_current_org
-from app.firebase_config import get_db
+from app.firebase_config import get_db, get_auth
 from app.constants import PLANS
 import stripe
 import os
+import logging
 from datetime import datetime
 
 router = APIRouter(prefix="/billing", tags=["Billing"])
+logger = logging.getLogger(__name__)
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
@@ -135,3 +137,143 @@ async def get_billing_status(org: dict = Depends(get_current_org)):
         },
         "features": plan_info["features"]
     }
+
+@router.post("/public/record-checkout")
+async def record_checkout(data: dict):
+    """
+    Called by the site API to record a pending organization setup after checkout initiation.
+    """
+    customer_id = data.get("customerId")
+    if not customer_id:
+        raise HTTPException(400, "Customer ID required")
+    
+    db = get_db()
+    db.collection("pending_organizations").document(customer_id).set({
+        "org_name": data.get("orgName"),
+        "admin_email": data.get("adminEmail"),
+        "admin_name": data.get("adminName"),
+        "plan_id": data.get("planId"),
+        "created_at": datetime.utcnow(),
+        "status": "pending_setup"
+    })
+    
+    return {"status": "ok"}
+
+@router.post("/public/verify-customer-id")
+async def verify_customer_id(data: dict):
+    """
+    Verify if a customer ID exists and is pending setup.
+    """
+    customer_id = data.get("customerId")
+    db = get_db()
+    doc = db.collection("pending_organizations").document(customer_id).get()
+    
+    if not doc.exists:
+        raise HTTPException(404, "Invalid Customer ID")
+    
+    org_data = doc.to_dict()
+    if org_data.get("status") != "pending_setup":
+        raise HTTPException(400, "Account already set up for this ID")
+        
+    return {
+        "orgName": org_data.get("org_name"),
+        "adminEmail": org_data.get("admin_email"),
+        "adminName": org_data.get("admin_name")
+    }
+
+@router.post("/public/lookup-id")
+async def lookup_id(data: dict):
+    """
+    Look up an organization's admin email by customer ID (for return logins).
+    """
+    customer_id = data.get("customerId")
+    db = get_db()
+    
+    # Search in organizations collection
+    orgs = db.collection("organizations").where("customer_id", "==", customer_id).limit(1).stream()
+    
+    org_doc = None
+    for doc in orgs:
+        org_doc = doc.to_dict()
+        break
+        
+    if not org_doc:
+        raise HTTPException(404, "Customer ID not found or account not set up")
+        
+    # Get the owner's email
+    owner_uid = org_doc.get("owner_uid")
+    user_doc = db.collection("users").document(owner_uid).get()
+    
+    if not user_doc.exists:
+        raise HTTPException(404, "Owner user not found")
+        
+    return {"email": user_doc.to_dict().get("email")}
+
+@router.post("/public/setup-password")
+async def setup_password(data: dict):
+    """
+    Create a Firebase user and organization for a customer ID.
+    """
+    customer_id = data.get("customerId")
+    password = data.get("password")
+    
+    if not customer_id or not password:
+        raise HTTPException(400, "Customer ID and password required")
+        
+    db = get_db()
+    auth = get_auth()
+    
+    pending_ref = db.collection("pending_organizations").document(customer_id)
+    pending_doc = pending_ref.get()
+    
+    if not pending_doc.exists:
+        raise HTTPException(404, "Invalid Customer ID")
+        
+    org_data = pending_doc.to_dict()
+    if org_data.get("status") != "pending_setup":
+        raise HTTPException(400, "Account already set up")
+        
+    try:
+        # 1. Create Firebase User
+        user = auth.create_user(
+            email=org_data["admin_email"],
+            password=password,
+            display_name=org_data["admin_name"]
+        )
+        
+        # 2. Set custom claims (admin role)
+        auth.set_custom_user_claims(user.uid, {"role": "admin"})
+        
+        # 3. Create Organization
+        plan_id = org_data["plan_id"]
+        plan_info = PLANS.get(plan_id, PLANS["basic"])
+        
+        org_id = f"org_{user.uid[:8]}"
+        db.collection("organizations").document(org_id).set({
+            "name": org_data["org_name"],
+            "owner_uid": user.uid,
+            "plan": plan_id,
+            "subscription_status": "active",
+            "limits": plan_info["limits"],
+            "features": plan_info["features"],
+            "created_at": datetime.utcnow(),
+            "customer_id": customer_id
+        })
+        
+        # 4. Create Admin record
+        db.collection("users").document(user.uid).set({
+            "email": org_data["admin_email"],
+            "name": org_data["admin_name"],
+            "role": "admin",
+            "org_id": org_id,
+            "created_at": datetime.utcnow()
+        })
+        
+        # 5. Mark pending as completed
+        pending_ref.update({"status": "completed", "completed_at": datetime.utcnow()})
+        
+        return {"status": "ok", "message": "Account created successfully"}
+        
+    except Exception as e:
+        logger.error(f"Error setting up account: {e}")
+        raise HTTPException(500, str(e))
