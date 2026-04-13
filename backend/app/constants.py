@@ -10,7 +10,7 @@ PLANS = {
     "pro": {
         "price_month": 250,
         "limits": {
-            "responders": 50,
+            "responders": 100,
             "reports_per_month": 10000,
         },
         "features": ["dashboard", "reports", "responders", "map", "ai_detection", "smart_assignment", "analytics", "heatmaps", "notifications"],

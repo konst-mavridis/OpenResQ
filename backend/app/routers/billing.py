@@ -75,21 +75,54 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
 
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
-        org_id = session["metadata"].get("org_id")
-        plan = session["metadata"].get("plan")
+        metadata = session.get("metadata", {})
+        org_id = metadata.get("org_id")
+        plan = metadata.get("plan") or metadata.get("plan_id") or metadata.get("planId")
+        
+        db = get_db()
+        
+        if not org_id and metadata.get("uid"):
+            uid = metadata.get("uid")
+            try:
+                user_doc = db.collection("users").document(uid).get()
+                if user_doc.exists:
+                    org_id = user_doc.to_dict().get("org_id")
+            except Exception:
+                pass
+            
+            if not org_id:
+                try:
+                    org_docs = list(db.collection("organizations").where("owner_uid", "==", uid).limit(1).stream())
+                    if org_docs:
+                        org_id = org_docs[0].id
+                except Exception:
+                    pass
+
+        if not org_id and session.get("customer"):
+            try:
+                org_docs = list(db.collection("organizations").where("customer_id", "==", session.get("customer")).limit(1).stream())
+                if org_docs:
+                    org_id = org_docs[0].id
+            except Exception:
+                pass
         
         if org_id and plan:
-            db = get_db()
+            plan_info = PLANS.get(plan, PLANS["basic"])
             # Update organization
-            db.collection("organizations").document(org_id).update({
+            update_data = {
                 "plan": plan,
                 "subscription_status": "active",
                 "subscription_id": session.get("subscription"),
                 "current_period_end": datetime.utcnow().timestamp() + (30 * 24 * 60 * 60), # Approx 1 month, better to get from subscription object
-                "limits": PLANS[plan]["limits"],
+                "limits": plan_info.get("limits", {}),
+                "features": plan_info.get("features", []),
                 "manual_override": False,
                 "updated_at": datetime.utcnow()
-            })
+            }
+            if session.get("customer"):
+                update_data["customer_id"] = session.get("customer")
+
+            db.collection("organizations").document(org_id).update(update_data)
             
             # Log payment
             db.collection("payments").add({
@@ -102,6 +135,20 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
                 "created_at": datetime.utcnow(),
                 "stripe_session_id": session.get("id")
             })
+
+            # Also update upgrade_requests if this was an upgrade
+            session_id = session.get("id")
+            if session_id:
+                try:
+                    upgrade_docs = list(db.collection("upgrade_requests").where("stripe_session_id", "==", session_id).stream())
+                    for doc in upgrade_docs:
+                        doc.reference.update({
+                            "status": "completed",
+                            "completed_at": datetime.utcnow(),
+                            "subscription_id": session.get("subscription")
+                        })
+                except Exception as e:
+                    logger.error(f"Error updating upgrade_requests in webhook: {e}")
 
     elif event["type"] in ["customer.subscription.deleted", "customer.subscription.updated"]:
         subscription = event["data"]["object"]
