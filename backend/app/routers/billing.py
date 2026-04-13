@@ -613,10 +613,11 @@ async def upgrade_completed(request_data: UpgradeCompletedRequest):
             logger.info(f"Organization {org_id} updated to plan={plan_id}")
         else:
             logger.warning(f"Could not resolve org_id for uid={uid}, email={admin_email}, customer={customer_id} — org NOT updated")
-            "status": "completed",
-            "completed_at": datetime.utcnow(),
-            "plan_id": plan_id,
-        }
+            update_payload = {
+                "status": "completed",
+                "completed_at": datetime.utcnow(),
+                "plan_id": plan_id
+            }
         if uid:
             update_payload["uid"] = uid
         if admin_email:
