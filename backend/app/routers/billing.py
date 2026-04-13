@@ -74,8 +74,13 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
         raise HTTPException(400, f"Invalid webhook signature: {e}")
 
     if event["type"] == "checkout.session.completed":
-        session = event["data"]["object"]
-        metadata = session.get("metadata", {})
+        session_obj = event["data"]["object"]
+        # Convert StripeObject to standard dict
+        session = session_obj if isinstance(session_obj, dict) else session_obj.to_dict()
+        
+        metadata_obj = session.get("metadata", {})
+        metadata = metadata_obj if isinstance(metadata_obj, dict) else (metadata_obj.to_dict() if hasattr(metadata_obj, "to_dict") else {})
+        
         org_id = metadata.get("org_id")
         plan = metadata.get("plan") or metadata.get("plan_id") or metadata.get("planId")
         
