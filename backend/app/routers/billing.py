@@ -580,6 +580,19 @@ async def upgrade_completed(request_data: UpgradeCompletedRequest):
             if org_docs:
                 org_id = org_docs[0].id
 
+        # Final fallback: query organizations directly by owner_uid
+        if not org_id and uid:
+            org_docs = list(
+                db.collection("organizations")
+                .where("owner_uid", "==", uid)
+                .limit(1)
+                .stream()
+            )
+            if org_docs:
+                org_id = org_docs[0].id
+                logger.info(f"Resolved org_id={org_id} via owner_uid lookup")
+
+        org_updated = False
         if org_id:
             plan_info = PLANS[plan_id]
             org_update = {
@@ -596,8 +609,10 @@ async def upgrade_completed(request_data: UpgradeCompletedRequest):
                 org_update["customer_id"] = customer_id
 
             db.collection("organizations").document(org_id).set(org_update, merge=True)
-
-        update_payload = {
+            org_updated = True
+            logger.info(f"Organization {org_id} updated to plan={plan_id}")
+        else:
+            logger.warning(f"Could not resolve org_id for uid={uid}, email={admin_email}, customer={customer_id} — org NOT updated")
             "status": "completed",
             "completed_at": datetime.utcnow(),
             "plan_id": plan_id,
@@ -638,6 +653,7 @@ async def upgrade_completed(request_data: UpgradeCompletedRequest):
             "plan_id": plan_id,
             "uid": uid,
             "org_id": org_id,
+            "org_updated": org_updated,
         }
     except HTTPException:
         raise

@@ -53,9 +53,15 @@ export default function BillingPage() {
             );
             // Clear the URL params
             window.history.replaceState({}, document.title, "/billing");
-            
-            // Wait a bit for backend to process
-            await new Promise((resolve) => setTimeout(resolve, 3000));
+
+            if (!result.org_updated) {
+              console.warn("Backend could not locate the org to update — will retry fetching status");
+            }
+
+            // Force token refresh so the updated org data is returned
+            await auth.currentUser?.getIdToken(true);
+            // Wait a moment for Firestore consistency
+            await new Promise((resolve) => setTimeout(resolve, 2000));
           }
         } catch (err) {
           console.error("Error completing upgrade:", err);
