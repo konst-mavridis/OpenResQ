@@ -34,32 +34,48 @@ export default function LoginPage() {
   }, []);
 
   async function storeUserLocation(uid: string) {
-    try {
-      if ("geolocation" in navigator) {
-        navigator.geolocation.getCurrentPosition(
-          async (position) => {
-            const { latitude, longitude } = position.coords;
-            const userRef = doc(db, "users", uid);
-            await setDoc(
-              userRef,
-              {
-                area: {
-                  latitude,
-                  longitude,
-                  radius: 20, // 20km radius
-                },
-              },
-              { merge: true }
-            );
-          },
-          (error) => {
-            console.warn("Geolocation permission denied:", error);
-          }
-        );
+    return new Promise<void>((resolve) => {
+      try {
+        if ("geolocation" in navigator) {
+          navigator.geolocation.getCurrentPosition(
+            async (position) => {
+              try {
+                const latitude = parseFloat(position.coords.latitude.toFixed(6));
+                const longitude = parseFloat(position.coords.longitude.toFixed(6));
+                const userRef = doc(db, "users", uid);
+                
+                await setDoc(
+                  userRef,
+                  {
+                    area: {
+                      latitude,
+                      longitude,
+                      radius_km: 20.0, // 20km radius as double
+                    },
+                  },
+                  { merge: true }
+                );
+                console.log("Location saved successfully");
+              } catch (err) {
+                console.error("Error saving location to Firestore:", err);
+              } finally {
+                resolve();
+              }
+            },
+            (error) => {
+              console.warn("Geolocation permission denied:", error);
+              resolve();
+            }
+          );
+        } else {
+          console.warn("Geolocation not supported");
+          resolve();
+        }
+      } catch (err) {
+        console.error("Error requesting location:", err);
+        resolve();
       }
-    } catch (err) {
-      console.error("Error storing location:", err);
-    }
+    });
   }
 
   async function handleIdCheck(e: React.FormEvent) {
@@ -122,9 +138,10 @@ export default function LoginPage() {
       }
       
       window.location.href = "/";
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "Invalid credentials";
       console.error(err);
-      setError(err.message || "Invalid credentials");
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -270,7 +287,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 rounded-xl bg-primary text-white font-semibold hover:bg-primary/90 transition-all duration-200 shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-3 rounded-xl bg-gray-700 text-white font-semibold hover:bg-primary/90 transition-all duration-200 shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? "Processing…" : (isNewId ? "Complete Setup" : (email || loginMethod === "email" ? "Login" : "Continue"))}
             </button>

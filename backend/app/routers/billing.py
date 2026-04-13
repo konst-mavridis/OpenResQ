@@ -120,7 +120,16 @@ async def get_billing_status(org: dict = Depends(get_current_org)):
     
     # Calculate current usage
     db = get_db()
-    responder_count = db.collection("responders").where("org_id", "==", org["id"]).count().get()[0].value
+    responder_count_query = db.collection("responders").where("org_id", "==", org["id"]).count()
+    responder_count_result = responder_count_query.get()
+    responder_count = 0
+    try:
+        if responder_count_result and len(responder_count_result) > 0 and len(responder_count_result[0]) > 0:
+            responder_count = int(responder_count_result[0][0].value)
+    except Exception as e:
+        logger.warning(f"Error getting responder count: {e}")
+        pass
+
     
     # Mock incident count for this month (should be calculated from records)
     incident_count = 0 
