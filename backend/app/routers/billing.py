@@ -143,6 +143,7 @@ async def record_checkout(data: dict):
     """
     Called by the site API to record a pending organization setup after checkout initiation.
     """
+    print(f"DEBUG: Recording checkout: {data}")
     customer_id = data.get("customerId")
     if not customer_id:
         raise HTTPException(400, "Customer ID required")
@@ -157,7 +158,21 @@ async def record_checkout(data: dict):
         "status": "pending_setup"
     })
     
-    return {"status": "ok"}
+    return {"status": "ok", "customerId": customer_id}
+
+@router.get("/public/debug-pending")
+async def debug_pending():
+    """
+    Debug endpoint to list all pending organizations.
+    """
+    db = get_db()
+    docs = db.collection("pending_organizations").stream()
+    pending = []
+    for doc in docs:
+        d = doc.to_dict()
+        d["id"] = doc.id
+        pending.append(d)
+    return pending
 
 @router.post("/public/verify-customer-id")
 async def verify_customer_id(data: dict):
@@ -165,10 +180,12 @@ async def verify_customer_id(data: dict):
     Verify if a customer ID exists and is pending setup.
     """
     customer_id = data.get("customerId")
+    print(f"DEBUG: Verifying Customer ID: {customer_id}")
     db = get_db()
     doc = db.collection("pending_organizations").document(customer_id).get()
     
     if not doc.exists:
+        print(f"DEBUG: Customer ID {customer_id} NOT FOUND in pending_organizations")
         raise HTTPException(404, "Invalid Customer ID")
     
     org_data = doc.to_dict()

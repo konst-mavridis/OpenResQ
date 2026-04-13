@@ -147,7 +147,8 @@ export async function POST(req) {
     // Record checkout in the main database via backend
     try {
       const backendUrl = process.env.BACKEND_API_URL || "http://localhost:8000";
-      await fetch(`${backendUrl}/billing/public/record-checkout`, {
+      console.log(`Attempting to record checkout at ${backendUrl}`);
+      const dbResponse = await fetch(`${backendUrl}/billing/public/record-checkout`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -158,9 +159,15 @@ export async function POST(req) {
           planId
         }),
       });
-      console.log("Checkout recorded in backend");
+      
+      if (dbResponse.ok) {
+        console.log("Checkout recorded in backend successfully");
+      } else {
+        const errText = await dbResponse.text();
+        console.error(`Backend returned ${dbResponse.status}: ${errText}`);
+      }
     } catch (dbErr) {
-      console.error("Failed to record checkout in backend:", dbErr);
+      console.error("Failed to record checkout in backend error:", dbErr);
       // We still return the session URL because the payment process should proceed
     }
 

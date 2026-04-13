@@ -38,11 +38,12 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      const trimmedId = customerId.trim().toUpperCase();
       const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
       const response = await fetch(`${backendUrl}/billing/public/verify-customer-id`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customerId }),
+        body: JSON.stringify({ customerId: trimmedId }),
       });
 
       const data = await response.json();
@@ -67,11 +68,12 @@ export default function LoginPage() {
     try {
       if (isNewId) {
         // Registration/Setup flow
+        const trimmedId = customerId.trim().toUpperCase();
         const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
         const setupRes = await fetch(`${backendUrl}/billing/public/setup-password`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ customerId, password }),
+          body: JSON.stringify({ customerId: trimmedId, password }),
         });
         
         if (!setupRes.ok) {
