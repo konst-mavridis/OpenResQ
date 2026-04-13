@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Header
+from pydantic import BaseModel
 from app.dependencies.auth import get_current_user
 from app.dependencies.subscription import get_current_org
 from app.firebase_config import get_db, get_auth
@@ -303,3 +304,197 @@ async def setup_password(data: dict):
     except Exception as e:
         logger.error(f"Error setting up account: {e}")
         raise HTTPException(500, str(e))
+
+
+# ===== Plan Upgrade Endpoints =====
+
+class UpgradePlanRequest(BaseModel):
+    plan_id: str
+    latitude: float = None
+    longitude: float = None
+    uid: str
+
+class RecordUpgradeRequest(BaseModel):
+    uid: str
+    plan_id: str
+    org_name: str = None
+    admin_email: str = None
+    latitude: float = None
+    longitude: float = None
+
+@router.post("/upgrade-plan")
+async def upgrade_plan(
+    request_data: UpgradePlanRequest,
+    authorization: str = Header(None)
+):
+    """
+    Create a Stripe checkout session for a plan upgrade.
+    Called from Next.js frontend to initiate plan upgrade.
+    
+    - Verifies user token
+    - Gets user data from Firestore
+    - Creates Stripe checkout session
+    - Updates user location if provided
+    - Records upgrade in backend
+    
+    Returns: Stripe checkout session URL
+    """
+    logger.info(f"Upgrade Plan API Hit for user {request_data.uid}")
+    
+    try:
+        # Validate inputs
+        if not request_data.uid:
+            raise HTTPException(400, "User ID required")
+        
+        # Verify user token
+        if not authorization:
+            raise HTTPException(401, "Unauthorized - Missing token")
+        
+        token = authorization.replace("Bearer ", "")
+        if not token:
+            raise HTTPException(401, "Unauthorized - Invalid token format")
+        
+        auth = get_auth()
+        db = get_db()
+        
+        try:
+            decoded_token = auth.verify_id_token(token)
+            token_uid = decoded_token.get("uid")
+            if token_uid != request_data.uid:
+                raise HTTPException(401, "Token UID does not match request UID")
+        except Exception as err:
+            logger.error(f"Token verification failed: {err}")
+            raise HTTPException(401, "Invalid token")
+        
+        # Get user data from Firestore
+        user_doc = db.collection("users").document(request_data.uid).get()
+        if not user_doc.exists:
+            raise HTTPException(404, "User not found")
+        
+        user_data = user_doc.to_dict()
+        
+        # Validate plan
+        if request_data.plan_id not in PLANS:
+            raise HTTPException(400, "Invalid plan ID")
+        
+        selected_plan = PLANS[request_data.plan_id]
+        
+        # Get price IDs from environment
+        price_id = os.getenv(f"STRIPE_PRICE_{request_data.plan_id.upper()}")
+        setup_price_id = os.getenv(f"STRIPE_PRICE_{request_data.plan_id.upper()}_SETUP")
+        
+        if not price_id:
+            raise HTTPException(500, f"Stripe price not configured for plan {request_data.plan_id}")
+        
+        # Create Stripe checkout session
+        line_items = [
+            {
+                "price": price_id,
+                "quantity": 1,
+            }
+        ]
+        
+        # Add setup fee if available
+        if setup_price_id:
+            line_items.append({
+                "price": setup_price_id,
+                "quantity": 1,
+            })
+        
+        frontend_url = os.getenv("NEXT_PUBLIC_SITE_URL", "http://localhost:3000")
+        
+        session = stripe.checkout.Session.create(
+            customer_email=user_data.get("email"),
+            payment_method_types=["card"],
+            line_items=line_items,
+            mode="subscription",
+            success_url=f"{frontend_url}/billing?upgrade=success&session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{frontend_url}/billing",
+            metadata={
+                "plan_id": request_data.plan_id,
+                "uid": request_data.uid,
+                "org_name": user_data.get("org_name", "Unknown"),
+                "admin_email": user_data.get("email"),
+                "upgrade_type": "plan_upgrade",
+            },
+        )
+        
+        logger.info(f"Stripe session created: {session.id}")
+        
+        # Update user location in Firestore if provided
+        if request_data.latitude and request_data.longitude:
+            try:
+                db.collection("users").document(request_data.uid).update({
+                    "area": {
+                        "latitude": float(request_data.latitude),
+                        "longitude": float(request_data.longitude),
+                        "radius_km": 20.0,
+                    },
+                    "last_updated": datetime.utcnow(),
+                })
+                logger.info(f"User location updated for upgrade")
+            except Exception as loc_err:
+                logger.error(f"Failed to update location: {loc_err}")
+                # Don't fail the entire request
+        
+        # Record upgrade request in Firestore
+        try:
+            db.collection("upgrade_requests").add({
+                "uid": request_data.uid,
+                "plan_id": request_data.plan_id,
+                "org_name": user_data.get("org_name"),
+                "admin_email": user_data.get("email"),
+                "latitude": request_data.latitude,
+                "longitude": request_data.longitude,
+                "stripe_session_id": session.id,
+                "status": "pending",
+                "created_at": datetime.utcnow(),
+            })
+            logger.info("Upgrade request recorded in Firestore")
+        except Exception as db_err:
+            logger.error(f"Failed to record upgrade in Firestore: {db_err}")
+            # Continue - payment process should proceed
+        
+        return {"url": session.url}
+        
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"Upgrade Plan Error: {err}")
+        raise HTTPException(500, str(err))
+
+
+@router.post("/public/record-upgrade")
+async def record_upgrade(request_data: RecordUpgradeRequest):
+    """
+    Public endpoint to record a plan upgrade in the backend database.
+    Called by Next.js after Stripe checkout is initiated.
+    
+    Records the upgrade request for database/analytics purposes.
+    """
+    logger.info(f"Recording upgrade: {request_data.uid} to {request_data.plan_id}")
+    
+    try:
+        if not request_data.uid or not request_data.plan_id:
+            raise HTTPException(400, "User ID and Plan ID required")
+        
+        db = get_db()
+        
+        # Record upgrade in upgrade_requests collection
+        db.collection("upgrade_requests").add({
+            "uid": request_data.uid,
+            "plan_id": request_data.plan_id,
+            "org_name": request_data.org_name,
+            "admin_email": request_data.admin_email,
+            "latitude": request_data.latitude,
+            "longitude": request_data.longitude,
+            "status": "pending",
+            "created_at": datetime.utcnow(),
+        })
+        
+        logger.info("Upgrade recorded in backend successfully")
+        return {"status": "ok", "message": "Upgrade recorded successfully"}
+        
+    except Exception as err:
+        logger.error(f"Failed to record upgrade: {err}")
+        raise HTTPException(500, str(err))

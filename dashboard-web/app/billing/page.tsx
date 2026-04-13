@@ -46,15 +46,74 @@ export default function BillingPage() {
     }
   };
 
+  const getLocation = (): Promise<{ latitude: number; longitude: number }> => {
+    return new Promise((resolve, reject) => {
+      if ("geolocation" in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            resolve({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+            });
+          },
+          (error) => {
+            console.warn("Geolocation permission denied:", error);
+            // Resolve with null values if denied
+            resolve({ latitude: 0, longitude: 0 });
+          }
+        );
+      } else {
+        console.warn("Geolocation not supported");
+        reject(new Error("Geolocation not supported"));
+      }
+    });
+  };
+
   const handleUpgrade = async (planId: string) => {
     setUpgrading(planId);
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) return;
-      const { url } = await apiPost("/billing/create-checkout-session", { plan_id: planId }, token);
+      const user = auth.currentUser;
+      if (!user) {
+        setError("User not authenticated");
+        return;
+      }
+
+      // Get location
+      const location = await getLocation();
+      const token = await user.getIdToken();
+
+      if (!token) {
+        setError("Failed to get authentication token");
+        return;
+      }
+
+      // Call upgrade API with location
+      const response = await fetch("/api/billing/upgrade-plan", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          planId,
+          uid: user.uid,
+          latitude: location.latitude,
+          longitude: location.longitude,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to create checkout session");
+      }
+
+      const { url } = await response.json();
       window.location.href = url;
     } catch (err) {
-      setError(`Failed to create checkout session: ${err instanceof Error ? err.message : String(err)}`);
+      setError(
+        `Failed to upgrade plan: ${err instanceof Error ? err.message : String(err)}`
+      );
+      console.error(err);
     } finally {
       setUpgrading(null);
     }
@@ -72,9 +131,9 @@ export default function BillingPage() {
   }
 
   const plans = [
-    { id: "basic", name: "Basic", price: 49, color: "blue" },
-    { id: "pro", name: "Pro", price: 149, color: "purple" },
-    { id: "enterprise", name: "Enterprise", price: 399, color: "emerald" },
+    { id: "basic", name: "Basic", price: 100, color: "blue" },
+    { id: "pro", name: "Pro", price: 250, color: "purple" },
+    { id: "enterprise", name: "Enterprise", price: "Contact Us", color: "emerald" },
   ];
 
   return (
@@ -154,7 +213,7 @@ export default function BillingPage() {
                       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-emerald-500">
                         <path d="M13.3333 4L6 11.3333L2.66666 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                       </svg>
-                      {p.id === "enterprise" ? "Unlimited Responders" : `${p.id === "pro" ? "50" : "10"} Responders`}
+                      {p.id === "enterprise" ? "Unlimited Responders" : `${p.id === "pro" ? "50" : "25"} Responders`}
                     </li>
                     <li className="flex items-center gap-2 text-zinc-400">
                       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-emerald-500">
