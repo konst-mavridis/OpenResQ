@@ -2,6 +2,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore, auth, storage, messaging
 from app.config import get_settings
 import logging
+from typing import Callable, Any
 
 logger = logging.getLogger(__name__)
 
@@ -48,13 +49,25 @@ def get_storage():
         initialize_firebase()
     return _bucket
 
-# Export db for backward compatibility
-db = get_db()
+class _LazyResource:
+    """Lazy proxy that resolves Firebase resources only when accessed."""
+
+    def __init__(self, resolver: Callable[[], Any]):
+        self._resolver = resolver
+
+    def __getattr__(self, item):
+        target = self._resolver()
+        return getattr(target, item)
+
+    def __call__(self, *args, **kwargs):
+        target = self._resolver()
+        return target(*args, **kwargs)
 
 def get_fcm():
     if not _initialized:
         initialize_firebase()
     return _fcm
 
-# Export fcm for backward compatibility
-fcm = get_fcm()
+# Export lazy aliases for backward compatibility
+db = _LazyResource(get_db)
+fcm = _LazyResource(get_fcm)

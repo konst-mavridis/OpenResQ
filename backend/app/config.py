@@ -5,10 +5,31 @@ All configuration is loaded from environment variables.
 import os
 import json
 import logging
-from pydantic import BaseSettings, Field
+from pydantic_settings import BaseSettings
+from pydantic import Field
 from typing import Optional
+from pydantic_settings import SettingsConfigDict
 
 logger = logging.getLogger(__name__)
+
+
+def _read_env_value_from_file(key: str, env_file: str = ".env") -> Optional[str]:
+    """Best-effort fallback reader for simple KEY=VALUE entries in .env."""
+    try:
+        if not os.path.exists(env_file):
+            return None
+
+        with open(env_file, "r", encoding="utf-8") as f:
+            for line in f:
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#") or "=" not in stripped:
+                    continue
+                k, v = stripped.split("=", 1)
+                if k.strip() == key:
+                    return v.strip()
+    except Exception:
+        return None
+    return None
 
 
 class Settings(BaseSettings):
@@ -51,9 +72,11 @@ class Settings(BaseSettings):
     # OpenAI
     openai_api_key: str = Field(env="OPENAI_API_KEY")
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore",
+    )
     
     def is_production(self) -> bool:
         """Check if running in production mode."""
@@ -65,7 +88,18 @@ class Settings(BaseSettings):
     
     def get_firebase_credentials(self) -> dict:
         """Load Firebase credentials from environment variable."""
-        if not self.firebase_credentials_json:
+        raw_value = (
+            self.firebase_credentials_json
+            or os.getenv("FIREBASE_CREDENTIALS")
+            or _read_env_value_from_file("FIREBASE_CREDENTIALS", ".env")
+            or _read_env_value_from_file("FIREBASE_CREDENTIALS", "backend/.env")
+        )
+
+        # Some .env files wrap the JSON value in single/double quotes.
+        if raw_value and len(raw_value) >= 2 and raw_value[0] == raw_value[-1] and raw_value[0] in ("'", '"'):
+            raw_value = raw_value[1:-1]
+
+        if not raw_value:
             raise ValueError(
                 "FIREBASE_CREDENTIALS environment variable not set. "
                 "Please provide Firebase service account JSON as a base64-encoded string or raw JSON."
@@ -73,12 +107,12 @@ class Settings(BaseSettings):
         
         try:
             # Try parsing as JSON directly
-            return json.loads(self.firebase_credentials_json)
+            return json.loads(raw_value)
         except json.JSONDecodeError:
             try:
                 # Try base64 decoding if JSON parsing fails
                 import base64
-                decoded = base64.b64decode(self.firebase_credentials_json).decode('utf-8')
+                decoded = base64.b64decode(raw_value).decode('utf-8')
                 return json.loads(decoded)
             except Exception as e:
                 logger.error(f"Failed to parse Firebase credentials: {e}")

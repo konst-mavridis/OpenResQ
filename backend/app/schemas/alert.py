@@ -33,7 +33,7 @@ class AlertResponse(BaseModel):
 
 class UpdateAlertStatus(BaseModel):
     """Schema for updating alert status."""
-    status: str = Field(..., regex="^(active|resolved|archived)$")
+    status: str = Field(..., pattern="^(active|resolved|archived)$")
     
     class Config:
         example = {

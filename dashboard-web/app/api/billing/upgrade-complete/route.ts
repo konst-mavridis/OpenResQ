@@ -32,23 +32,6 @@ export async function GET(req: Request) {
       );
     }
 
-    const existingSubId = session.metadata?.existingSubscriptionId;
-    console.log("Existing subscription ID from metadata:", existingSubId);
-
-    // Cancel the old subscription if it exists
-    if (existingSubId && existingSubId !== "") {
-      try {
-        console.log("Attempting to cancel subscription:", existingSubId);
-        await stripe.subscriptions.cancel(existingSubId);
-        console.log(`✓ Successfully cancelled old subscription: ${existingSubId}`);
-      } catch (cancelErr) {
-        console.error(`✗ Failed to cancel subscription ${existingSubId}:`, cancelErr);
-        // Don't fail the upgrade if cancellation fails
-      }
-    } else {
-      console.log("No existing subscription to cancel");
-    }
-
     // Get the new subscription ID
     let newSubscriptionId: string | undefined;
     if (session.subscription) {
@@ -57,6 +40,45 @@ export async function GET(req: Request) {
         : session.subscription.id;
     }
 
+    const customerId = typeof session.customer === "string" ? session.customer : undefined;
+
+    // Keep only the upgraded subscription by cancelling all prior customer subscriptions.
+    if (customerId && newSubscriptionId) {
+      try {
+        const customerSubscriptions = await stripe.subscriptions.list({
+          customer: customerId,
+          status: "all",
+          limit: 100,
+        });
+
+        const cancelCandidates = customerSubscriptions.data.filter(
+          (sub) =>
+            sub.id !== newSubscriptionId &&
+            ["active", "trialing", "past_due", "unpaid", "incomplete"].includes(sub.status)
+        );
+
+        for (const oldSub of cancelCandidates) {
+          try {
+            console.log("Cancelling previous subscription:", oldSub.id, oldSub.status);
+            await stripe.subscriptions.cancel(oldSub.id);
+          } catch (cancelErr) {
+            console.error(`Failed to cancel previous subscription ${oldSub.id}:`, cancelErr);
+          }
+        }
+
+        console.log(
+          `Subscription cleanup complete. Kept ${newSubscriptionId}, cancelled ${cancelCandidates.length} old subscription(s).`
+        );
+      } catch (listErr) {
+        console.error("Failed to list/cancel previous subscriptions:", listErr);
+      }
+    }
+
+    const resolvedPlanId =
+      session.metadata?.planId ||
+      session.metadata?.plan_id ||
+      undefined;
+
     // Notify backend of successful upgrade
     try {
       const backendUrl =
@@ -64,9 +86,10 @@ export async function GET(req: Request) {
       const backendPayload = {
         sessionId,
         adminEmail: session.customer_email,
-        planId: session.metadata?.planId,
+        planId: resolvedPlanId,
         uid: session.metadata?.uid,
         subscriptionId: newSubscriptionId,
+        customerId,
       };
       console.log("Notifying backend with:", backendPayload);
       
@@ -79,7 +102,15 @@ export async function GET(req: Request) {
         }
       );
       
+      const backendText = await backendResponse.text();
       console.log("Backend response status:", backendResponse.status);
+      console.log("Backend response:", backendText);
+      
+      if (!backendResponse.ok) {
+        console.warn(`⚠ Backend error: ${backendResponse.status} - ${backendText}`);
+      } else {
+        console.log("✓ Backend successfully updated plan");
+      }
     } catch (dbErr) {
       console.error("Failed to notify backend of upgrade completion:", dbErr);
     }
@@ -87,7 +118,7 @@ export async function GET(req: Request) {
     return NextResponse.json({
       status: "success",
       message: "Upgrade completed successfully",
-      planId: session.metadata?.planId,
+      planId: resolvedPlanId,
       subscriptionId: newSubscriptionId,
     });
   } catch (err) {

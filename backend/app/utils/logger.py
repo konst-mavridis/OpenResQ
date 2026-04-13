@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional
 from app.config import get_settings
 from app.firebase_config import get_db
 
-db = get_db()
+db = None
 class JSONFormatter(logging.Formatter):
     """Custom formatter that outputs structured JSON logs."""
     def format(self, record: logging.LogRecord) -> str:
@@ -60,6 +60,8 @@ def log_action(
     save_to_firestore: bool = True,
     details: Optional[Dict[str, Any]] = None
 ):
+    global db
+
     log_data = {
         "action": action,
         "status": status,
@@ -87,8 +89,10 @@ def log_action(
     logger.handle(record)
 
     # Firestore (ΔΕΝ ρίχνει request)
-    if save_to_firestore and db:
+    if save_to_firestore:
         try:
+            if db is None:
+                db = get_db()
             db.collection("logs").add({
                 "timestamp": datetime.utcnow(),
                 **log_data

@@ -52,7 +52,7 @@ class UpdateUserArea(BaseModel):
 
 class UserRole(BaseModel):
     """Schema for updating user role."""
-    role: str = Field(..., regex="^(citizen|responder|admin)$")
+    role: str = Field(..., pattern="^(citizen|responder|admin)$")
     
     class Config:
         example = {

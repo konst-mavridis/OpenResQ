@@ -15,10 +15,24 @@ from io import BytesIO
 from openai import OpenAI
 import json
 import base64
+import os
 
 
 logger = logging.getLogger(__name__)
-client = OpenAI()
+_openai_client = None
+
+
+def _get_openai_client() -> Optional[OpenAI]:
+    global _openai_client
+    if _openai_client is not None:
+        return _openai_client
+
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return None
+
+    _openai_client = OpenAI(api_key=api_key)
+    return _openai_client
 
 class ReportService:
     """Service for report/incident operations."""
@@ -75,6 +89,11 @@ class ReportService:
         """
 
         try:
+            ai_client = _get_openai_client()
+            if ai_client is None:
+                logger.warning("OPENAI_API_KEY not configured; returning default AI analysis result")
+                return {"fire": False, "confidence": 0.0}
+
             print("\n========== [AI DEBUG START] ==========")
             print(f"[AI] Vision URL: {image_url}")
 
@@ -103,7 +122,7 @@ class ReportService:
             """
 
             # ---- 3) Κλήση OpenAI (όπως στα docs) ----
-            response = client.responses.create(
+            response = ai_client.responses.create(
                 model="gpt-4.1",
                 input=[
                     {

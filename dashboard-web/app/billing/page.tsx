@@ -54,8 +54,8 @@ export default function BillingPage() {
             // Clear the URL params
             window.history.replaceState({}, document.title, "/billing");
             
-            // Wait a bit then refresh the billing status
-            await new Promise((resolve) => setTimeout(resolve, 2000));
+            // Wait a bit for backend to process
+            await new Promise((resolve) => setTimeout(resolve, 3000));
           }
         } catch (err) {
           console.error("Error completing upgrade:", err);
@@ -63,14 +63,14 @@ export default function BillingPage() {
         }
       }
 
-      // Fetch billing status
+      // Fetch billing status with retries to wait for backend updates
       await fetchBillingStatus();
     };
 
     initializePage();
   }, []);
 
-  const fetchBillingStatus = async () => {
+  const fetchBillingStatus = async (retries = 0) => {
     try {
       setLoading(true);
       const token = await auth.currentUser?.getIdToken();
@@ -78,12 +78,22 @@ export default function BillingPage() {
         console.log("No auth token available");
         return;
       }
-      const data = await apiGet("/billing/status", token);
+      
+      // Force fresh fetch with cache busting
+      const data = await apiGet(`/billing/status?timestamp=${Date.now()}`, token);
       console.log("Billing status fetched:", data);
       setStatus(data);
       setError(null);
     } catch (err) {
       console.error("Error fetching billing status:", err);
+      
+      // Retry up to 3 times with delay for eventual consistency
+      if (retries < 3) {
+        console.log(`Retrying status fetch (attempt ${retries + 1}/3)...`);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        return fetchBillingStatus(retries + 1);
+      }
+      
       setError("Failed to load billing status");
     } finally {
       setLoading(false);
@@ -192,8 +202,14 @@ export default function BillingPage() {
           )}
 
           {successMessage && (
-            <div className="bg-emerald-500/20 border border-emerald-500 text-emerald-500 px-4 py-3 rounded-xl">
-              {successMessage}
+            <div className="bg-emerald-500/20 border border-emerald-500 text-emerald-500 px-4 py-3 rounded-xl flex items-center justify-between">
+              <span>{successMessage}</span>
+              <button 
+                onClick={() => fetchBillingStatus()}
+                className="text-emerald-400 hover:text-emerald-300 underline text-sm ml-4"
+              >
+                Refresh Now
+              </button>
             </div>
           )}
 
@@ -207,6 +223,12 @@ export default function BillingPage() {
                   <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${status?.status === 'active' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-red-500/10 text-red-500 border border-red-500/20'}`}>
                     {status?.status?.toUpperCase()}
                   </span>
+                  <button
+                    onClick={() => fetchBillingStatus()}
+                    className="ml-auto text-xs text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 px-3 py-1 rounded-lg transition"
+                  >
+                    Refresh
+                  </button>
                 </div>
                 {status?.current_period_end && (
                   <p className="text-zinc-400 mt-2">

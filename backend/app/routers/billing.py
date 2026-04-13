@@ -333,6 +333,8 @@ class UpgradeCompletedRequest(BaseModel):
     adminEmail: str = None
     subscription_id: str = None
     subscriptionId: str = None
+    customer_id: str = None
+    customerId: str = None
 
 @router.post("/upgrade-plan")
 async def upgrade_plan(
@@ -524,6 +526,7 @@ async def upgrade_completed(request_data: UpgradeCompletedRequest):
         uid = request_data.uid
         admin_email = request_data.admin_email or request_data.adminEmail
         subscription_id = request_data.subscription_id or request_data.subscriptionId
+        customer_id = request_data.customer_id or request_data.customerId
 
         if not session_id:
             raise HTTPException(400, "Session ID required")
@@ -567,6 +570,16 @@ async def upgrade_completed(request_data: UpgradeCompletedRequest):
 
         org_id = user_data.get("org_id") if user_data else None
 
+        if not org_id and customer_id:
+            org_docs = list(
+                db.collection("organizations")
+                .where("customer_id", "==", customer_id)
+                .limit(1)
+                .stream()
+            )
+            if org_docs:
+                org_id = org_docs[0].id
+
         if org_id:
             plan_info = PLANS[plan_id]
             org_update = {
@@ -579,6 +592,8 @@ async def upgrade_completed(request_data: UpgradeCompletedRequest):
             }
             if subscription_id:
                 org_update["subscription_id"] = subscription_id
+            if customer_id:
+                org_update["customer_id"] = customer_id
 
             db.collection("organizations").document(org_id).set(org_update, merge=True)
 

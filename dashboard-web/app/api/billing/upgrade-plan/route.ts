@@ -29,6 +29,10 @@ export async function POST(req: Request) {
         price_id: process.env.STRIPE_PRICE_PRO || "",
         setup_price_id: process.env.STRIPE_PRICE_PRO_SETUP,
       },
+      enterprise: {
+        price_id: process.env.STRIPE_PRICE_ENTERPRISE || "",
+        setup_price_id: process.env.STRIPE_PRICE_ENTERPRISE_SETUP,
+      },
     };
 
     const selectedPlan = plans[planId];
@@ -71,7 +75,7 @@ export async function POST(req: Request) {
     }
 
     // Create Checkout Session for upgrade
-    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
+    const lineItems = [
       {
         price: selectedPlan.price_id,
         quantity: 1,
@@ -101,6 +105,7 @@ export async function POST(req: Request) {
         latitude: latitude?.toString() || "",
         longitude: longitude?.toString() || "",
         existingSubscriptionId: existingSubscriptionId || "",
+        previousPlanHint: existingSubscriptionId ? "has_previous_subscription" : "new_subscription",
       },
     });
 
