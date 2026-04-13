@@ -146,7 +146,7 @@ export async function POST(req) {
 
     // Record checkout in the main database via backend
     try {
-      const backendUrl = process.env.BACKEND_API_URL || "http://localhost:8000";
+      const backendUrl = process.env.BACKEND_API_URL || "https://openresq.onrender.com";
       console.log(`Attempting to record checkout at ${backendUrl}`);
       const dbResponse = await fetch(`${backendUrl}/billing/public/record-checkout`, {
         method: "POST",

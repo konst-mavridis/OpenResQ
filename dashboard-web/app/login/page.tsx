@@ -39,7 +39,7 @@ export default function LoginPage() {
 
     try {
       const trimmedId = customerId.trim().toUpperCase();
-      const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || "https://openresq.onrender.com";
       const response = await fetch(`${backendUrl}/billing/public/verify-customer-id`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -69,7 +69,7 @@ export default function LoginPage() {
       if (isNewId) {
         // Registration/Setup flow
         const trimmedId = customerId.trim().toUpperCase();
-        const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || "https://openresq.onrender.com";
         const setupRes = await fetch(`${backendUrl}/billing/public/setup-password`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
