@@ -156,10 +156,37 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
                     logger.error(f"Error updating upgrade_requests in webhook: {e}")
 
     elif event["type"] in ["customer.subscription.deleted", "customer.subscription.updated"]:
-        subscription = event["data"]["object"]
-        # Handle subscription status changes
-        # ... logic to update Firestore accordingly
-        pass
+        subscription_obj = event["data"]["object"]
+        subscription = subscription_obj if isinstance(subscription_obj, dict) else subscription_obj.to_dict()
+        
+        customer_id = subscription.get("customer")
+        subscription_id = subscription.get("id")
+        status = subscription.get("status")
+        
+        if customer_id and subscription_id:
+            db = get_db()
+            try:
+                # Find the organization matching this specific subscription
+                org_docs = list(db.collection("organizations")
+                                .where("customer_id", "==", customer_id)
+                                .where("subscription_id", "==", subscription_id)
+                                .limit(1).stream())
+                
+                if org_docs:
+                    org_ref = org_docs[0].reference
+                    if event["type"] == "customer.subscription.deleted" or status in ["canceled", "unpaid", "past_due"]:
+                        # When a subscription is canceled, update status. Do not overwrite if they already have a newer subscription_id elsewhere!
+                        org_ref.update({
+                            "subscription_status": "canceled" if event["type"] == "customer.subscription.deleted" else status,
+                            "updated_at": datetime.utcnow()
+                        })
+                    else:
+                        org_ref.update({
+                            "subscription_status": status,
+                            "updated_at": datetime.utcnow()
+                        })
+            except Exception as e:
+                pass
 
     return {"status": "success"}
 
