@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { login, loginWithGoogle } from "../lib/auth";
-import { auth } from "../lib/firebase";
+import { auth, db } from "../lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore";
 import { motion } from "framer-motion";
 import Link from "next/link";
 
@@ -31,6 +32,35 @@ export default function LoginPage() {
     });
     return unsubscribe;
   }, []);
+
+  async function storeUserLocation(uid: string) {
+    try {
+      if ("geolocation" in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            const { latitude, longitude } = position.coords;
+            const userRef = doc(db, "users", uid);
+            await setDoc(
+              userRef,
+              {
+                area: {
+                  latitude,
+                  longitude,
+                  radius: 20, // 20km radius
+                },
+              },
+              { merge: true }
+            );
+          },
+          (error) => {
+            console.warn("Geolocation permission denied:", error);
+          }
+        );
+      }
+    } catch (err) {
+      console.error("Error storing location:", err);
+    }
+  }
 
   async function handleIdCheck(e: React.FormEvent) {
     e.preventDefault();
@@ -84,6 +114,13 @@ export default function LoginPage() {
 
       // Final Login
       await login(email, password);
+      
+      // Store location after successful login
+      const user = auth.currentUser;
+      if (user) {
+        await storeUserLocation(user.uid);
+      }
+      
       window.location.href = "/";
     } catch (err: any) {
       console.error(err);
@@ -99,6 +136,13 @@ export default function LoginPage() {
 
     try {
       await loginWithGoogle();
+      
+      // Store location after successful login
+      const user = auth.currentUser;
+      if (user) {
+        await storeUserLocation(user.uid);
+      }
+      
       window.location.href = "/";
     } catch (err) {
       console.error(err);
@@ -207,7 +251,7 @@ export default function LoginPage() {
                 />
                 {isNewId && (
                   <p className="text-[10px] text-zinc-500 mt-2">
-                    Min. 8 characters. You'll use this for future logins.
+                    Min. 8 characters. You&apos;ll use this for future logins.
                   </p>
                 )}
               </div>
