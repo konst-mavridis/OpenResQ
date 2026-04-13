@@ -322,6 +322,18 @@ class RecordUpgradeRequest(BaseModel):
     latitude: float = None
     longitude: float = None
 
+
+class UpgradeCompletedRequest(BaseModel):
+    session_id: str = None
+    sessionId: str = None
+    plan_id: str = None
+    planId: str = None
+    uid: str = None
+    admin_email: str = None
+    adminEmail: str = None
+    subscription_id: str = None
+    subscriptionId: str = None
+
 @router.post("/upgrade-plan")
 async def upgrade_plan(
     request_data: UpgradePlanRequest,
@@ -497,4 +509,123 @@ async def record_upgrade(request_data: RecordUpgradeRequest):
         
     except Exception as err:
         logger.error(f"Failed to record upgrade: {err}")
+        raise HTTPException(500, str(err))
+
+
+@router.post("/public/upgrade-completed")
+async def upgrade_completed(request_data: UpgradeCompletedRequest):
+    """
+    Public endpoint called after Stripe checkout confirms payment.
+    Finalizes plan upgrade in Firestore and marks upgrade requests as completed.
+    """
+    try:
+        session_id = request_data.session_id or request_data.sessionId
+        plan_id = request_data.plan_id or request_data.planId
+        uid = request_data.uid
+        admin_email = request_data.admin_email or request_data.adminEmail
+        subscription_id = request_data.subscription_id or request_data.subscriptionId
+
+        if not session_id:
+            raise HTTPException(400, "Session ID required")
+
+        db = get_db()
+
+        # Resolve missing plan from previously recorded upgrade request when possible.
+        if not plan_id:
+            existing_request_docs = list(
+                db.collection("upgrade_requests")
+                .where("stripe_session_id", "==", session_id)
+                .limit(1)
+                .stream()
+            )
+            if existing_request_docs:
+                plan_id = existing_request_docs[0].to_dict().get("plan_id")
+
+        if not plan_id:
+            raise HTTPException(400, "Plan ID required")
+
+        if plan_id not in PLANS:
+            raise HTTPException(400, "Invalid plan ID")
+
+        user_data = None
+
+        if uid:
+            user_doc = db.collection("users").document(uid).get()
+            if user_doc.exists:
+                user_data = user_doc.to_dict()
+
+        if not user_data and admin_email:
+            user_docs = list(
+                db.collection("users")
+                .where("email", "==", admin_email)
+                .limit(1)
+                .stream()
+            )
+            if user_docs:
+                uid = user_docs[0].id
+                user_data = user_docs[0].to_dict()
+
+        org_id = user_data.get("org_id") if user_data else None
+
+        if org_id:
+            plan_info = PLANS[plan_id]
+            org_update = {
+                "plan": plan_id,
+                "subscription_status": "active",
+                "limits": plan_info.get("limits", {}),
+                "features": plan_info.get("features", []),
+                "manual_override": False,
+                "updated_at": datetime.utcnow(),
+            }
+            if subscription_id:
+                org_update["subscription_id"] = subscription_id
+
+            db.collection("organizations").document(org_id).set(org_update, merge=True)
+
+        update_payload = {
+            "status": "completed",
+            "completed_at": datetime.utcnow(),
+            "plan_id": plan_id,
+        }
+        if uid:
+            update_payload["uid"] = uid
+        if admin_email:
+            update_payload["admin_email"] = admin_email
+        if subscription_id:
+            update_payload["subscription_id"] = subscription_id
+
+        matched_docs = list(
+            db.collection("upgrade_requests")
+            .where("stripe_session_id", "==", session_id)
+            .stream()
+        )
+
+        if matched_docs:
+            for doc in matched_docs:
+                doc.reference.set(update_payload, merge=True)
+        else:
+            db.collection("upgrade_requests").add(
+                {
+                    **update_payload,
+                    "stripe_session_id": session_id,
+                    "created_at": datetime.utcnow(),
+                }
+            )
+
+        logger.info(
+            f"Upgrade completion recorded: session={session_id}, uid={uid}, plan={plan_id}, org={org_id}"
+        )
+
+        return {
+            "status": "ok",
+            "message": "Upgrade completion processed",
+            "session_id": session_id,
+            "plan_id": plan_id,
+            "uid": uid,
+            "org_id": org_id,
+        }
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"Failed to process upgrade completion: {err}")
         raise HTTPException(500, str(err))

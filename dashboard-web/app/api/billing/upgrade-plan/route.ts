@@ -1,67 +1,22 @@
+"use server";
+
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
-import { getAuth } from "firebase-admin/auth";
-import { getFirestore } from "firebase-admin/firestore";
-import { initializeApp, App } from "firebase-admin/app";
-import { cert } from "firebase-admin/app";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
-
-// Initialize Firebase Admin (ensure you have FIREBASE_ADMIN_SDK_KEY in .env)
-let firebaseApp: App | undefined;
-try {
-  const serviceAccount = JSON.parse(
-    process.env.FIREBASE_ADMIN_SDK_KEY || "{}"
-  );
-  firebaseApp = initializeApp({
-    credential: cert(serviceAccount),
-  });
-} catch (error) {
-  console.error("Firebase Admin initialization failed:", error);
-}
-
-const db = firebaseApp ? getFirestore(firebaseApp) : null;
-const auth = firebaseApp ? getAuth(firebaseApp) : null;
 
 export async function POST(req: Request) {
   console.log("Upgrade Plan API Hit");
   try {
     const body = await req.json();
-    const { planId, latitude, longitude, uid } = body;
+    const { planId, latitude, longitude, email, uid } = body;
 
-    if (!uid) {
+    console.log("Request body:", { planId, email, uid });
+
+    if (!planId || !email || !uid) {
       return NextResponse.json(
-        { error: "User ID required" },
+        { error: "Plan ID, email, and uid required" },
         { status: 400 }
-      );
-    }
-
-    // Verify user token
-    const token = req.headers.get("authorization")?.replace("Bearer ", "");
-    if (!token || !auth) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
-
-    try {
-      await auth.verifyIdToken(token);
-    } catch (err) {
-      return NextResponse.json(
-        { error: "Invalid token" },
-        { status: 401 }
-      );
-    }
-
-    // Get user data from Firestore
-    const userDoc = await db?.collection("users").doc(uid).get();
-    const userData = userDoc?.data();
-
-    if (!userData) {
-      return NextResponse.json(
-        { error: "User not found" },
-        { status: 404 }
       );
     }
 
@@ -77,11 +32,42 @@ export async function POST(req: Request) {
     };
 
     const selectedPlan = plans[planId];
-    if (!selectedPlan) {
+    if (!selectedPlan || !selectedPlan.price_id) {
       return NextResponse.json(
-        { error: "Invalid plan ID" },
+        { error: "Invalid plan ID or price not configured" },
         { status: 400 }
       );
+    }
+
+    // Find existing customer and subscription
+    console.log("Looking for existing customer with email:", email);
+    const customers = await stripe.customers.list({
+      email: email,
+      limit: 1,
+    });
+
+    let customerId: string | undefined;
+    let existingSubscriptionId: string | undefined;
+
+    if (customers.data.length > 0) {
+      customerId = customers.data[0].id;
+      console.log("Found existing customer:", customerId);
+
+      // Get the customer's active subscription
+      const subscriptions = await stripe.subscriptions.list({
+        customer: customerId,
+        status: "active",
+        limit: 1,
+      });
+
+      if (subscriptions.data.length > 0) {
+        existingSubscriptionId = subscriptions.data[0].id;
+        console.log(`Found active subscription to cancel: ${existingSubscriptionId}`);
+      } else {
+        console.log("No active subscriptions found for customer");
+      }
+    } else {
+      console.log("No existing customer found, will create new one");
     }
 
     // Create Checkout Session for upgrade
@@ -92,7 +78,7 @@ export async function POST(req: Request) {
       },
     ];
 
-    // Add setup fee if upgrading from basic to pro or other tiers
+    // Add setup fee if available
     if (selectedPlan.setup_price_id) {
       lineItems.push({
         price: selectedPlan.setup_price_id,
@@ -101,7 +87,7 @@ export async function POST(req: Request) {
     }
 
     const session = await stripe.checkout.sessions.create({
-      customer_email: userData.email,
+      ...(customerId ? { customer: customerId } : { customer_email: email }),
       payment_method_types: ["card"],
       line_items: lineItems,
       mode: "subscription",
@@ -110,62 +96,46 @@ export async function POST(req: Request) {
       metadata: {
         planId,
         uid,
-        orgName: userData.orgName || "Unknown",
-        adminEmail: userData.email,
+        adminEmail: email,
         upgradeType: "plan_upgrade",
+        latitude: latitude?.toString() || "",
+        longitude: longitude?.toString() || "",
+        existingSubscriptionId: existingSubscriptionId || "",
       },
     });
 
-    // Update user location in Firestore if provided
-    if (latitude && longitude && db) {
-      try {
-        await db.collection("users").doc(uid).update({
-          area: {
-            latitude: parseFloat(latitude),
-            longitude: parseFloat(longitude),
-            radius_km: 20.0,
-          },
-          last_updated: new Date(),
-        });
-        console.log("User location updated for upgrade");
-      } catch (locErr) {
-        console.error("Failed to update location:", locErr);
-        // Don't fail the entire request if location update fails
-      }
-    }
+    console.log("Checkout session created:", {
+      sessionId: session.id,
+      customerId: customerId || "new",
+      existingSubscriptionId,
+      planId,
+    });
 
     // Record upgrade request in backend
     try {
       const backendUrl =
         process.env.BACKEND_API_URL || "https://openresq.onrender.com";
-      const dbResponse = await fetch(
-        `${backendUrl}/billing/public/record-upgrade`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            uid,
-            planId,
-            orgName: userData.orgName,
-            adminEmail: userData.email,
-            latitude,
-            longitude,
-          }),
-        }
-      );
-
-      if (dbResponse.ok) {
-        console.log("Upgrade recorded in backend successfully");
-      } else {
-        const errText = await dbResponse.text();
-        console.error(`Backend returned ${dbResponse.status}: ${errText}`);
-      }
+      await fetch(`${backendUrl}/billing/public/record-upgrade`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uid,
+          plan_id: planId,
+          admin_email: email,
+          latitude,
+          longitude,
+        }),
+      });
     } catch (dbErr) {
       console.error("Failed to record upgrade in backend:", dbErr);
       // Continue - payment process should proceed
     }
 
-    return NextResponse.json({ url: session.url });
+    return NextResponse.json({
+      url: session.url,
+      sessionId: session.id,
+      existingSubscriptionId,
+    });
   } catch (err) {
     console.error("Upgrade Plan Error:", err);
     return NextResponse.json(
@@ -174,3 +144,4 @@ export async function POST(req: Request) {
     );
   }
 }
+

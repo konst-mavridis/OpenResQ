@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { auth } from "../lib/firebase";
-import { apiGet, apiPost } from "../lib/api";
+import { apiGet } from "../lib/api";
 import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
 
@@ -27,20 +27,64 @@ export default function BillingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [upgrading, setUpgrading] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchBillingStatus();
+    const initializePage = async () => {
+      // Check for upgrade success
+      const params = new URLSearchParams(window.location.search);
+      const upgradeSuccess = params.get("upgrade");
+      const sessionId = params.get("session_id");
+
+      if (upgradeSuccess === "success" && sessionId) {
+        try {
+          setLoading(true);
+          // Complete the upgrade process
+          const response = await fetch(
+            `/api/billing/upgrade-complete?session_id=${sessionId}`
+          );
+          const result = await response.json();
+
+          console.log("Upgrade complete response:", result);
+
+          if (result.status === "success") {
+            setSuccessMessage(
+              `Congratulations! You've successfully upgraded to the ${result.planId} plan.`
+            );
+            // Clear the URL params
+            window.history.replaceState({}, document.title, "/billing");
+            
+            // Wait a bit then refresh the billing status
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+          }
+        } catch (err) {
+          console.error("Error completing upgrade:", err);
+          setError("Upgrade completed but we had an issue updating your info");
+        }
+      }
+
+      // Fetch billing status
+      await fetchBillingStatus();
+    };
+
+    initializePage();
   }, []);
 
   const fetchBillingStatus = async () => {
     try {
+      setLoading(true);
       const token = await auth.currentUser?.getIdToken();
-      if (!token) return;
+      if (!token) {
+        console.log("No auth token available");
+        return;
+      }
       const data = await apiGet("/billing/status", token);
+      console.log("Billing status fetched:", data);
       setStatus(data);
+      setError(null);
     } catch (err) {
+      console.error("Error fetching billing status:", err);
       setError("Failed to load billing status");
-      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -80,10 +124,9 @@ export default function BillingPage() {
 
       // Get location
       const location = await getLocation();
-      const token = await user.getIdToken();
 
-      if (!token) {
-        setError("Failed to get authentication token");
+      if (!user.email) {
+        setError("User email not available");
         return;
       }
 
@@ -92,11 +135,11 @@ export default function BillingPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           planId,
           uid: user.uid,
+          email: user.email,
           latitude: location.latitude,
           longitude: location.longitude,
         }),
@@ -145,6 +188,12 @@ export default function BillingPage() {
           {error && (
             <div className="bg-red-500/20 border border-red-500 text-red-500 px-4 py-3 rounded-xl">
               {error}
+            </div>
+          )}
+
+          {successMessage && (
+            <div className="bg-emerald-500/20 border border-emerald-500 text-emerald-500 px-4 py-3 rounded-xl">
+              {successMessage}
             </div>
           )}
 
