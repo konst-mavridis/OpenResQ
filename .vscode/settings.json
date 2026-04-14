@@ -1,5 +1,5 @@
 {
     "python-envs.defaultEnvManager": "ms-python.python:system",
     "python-envs.pythonProjects": [],
-    "cmake.sourceDirectory": "C:/Users/user/Desktop/OpenResQ/openresq_app/linux"
+    "cmake.sourceDirectory": "/Users/kmavridis/Desktop/OpenResQ/openresq_app/linux"
 }

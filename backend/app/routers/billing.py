@@ -83,6 +83,8 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
         
         org_id = metadata.get("org_id")
         plan = metadata.get("plan") or metadata.get("plan_id") or metadata.get("planId")
+        previous_subscription_id = metadata.get("previous_subscription_id") or None
+        new_subscription_id = session.get("subscription")
         
         db = get_db()
         
@@ -117,7 +119,7 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
             update_data = {
                 "plan": plan,
                 "subscription_status": "active",
-                "subscription_id": session.get("subscription"),
+                "subscription_id": new_subscription_id,
                 "current_period_end": datetime.utcnow().timestamp() + (30 * 24 * 60 * 60), # Approx 1 month, better to get from subscription object
                 "limits": plan_info.get("limits", {}),
                 "features": plan_info.get("features", []),
@@ -128,6 +130,21 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
                 update_data["customer_id"] = session.get("customer")
 
             db.collection("organizations").document(org_id).update(update_data)
+
+            if (
+                previous_subscription_id
+                and new_subscription_id
+                and previous_subscription_id != new_subscription_id
+            ):
+                try:
+                    stripe.Subscription.delete(previous_subscription_id)
+                    logger.info(
+                        f"Cancelled previous subscription {previous_subscription_id} after upgrade for org {org_id}"
+                    )
+                except Exception as cancel_err:
+                    logger.warning(
+                        f"Failed to cancel previous subscription {previous_subscription_id}: {cancel_err}"
+                    )
             
             # Log payment
             db.collection("payments").add({
@@ -150,7 +167,8 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
                         doc.reference.update({
                             "status": "completed",
                             "completed_at": datetime.utcnow(),
-                            "subscription_id": session.get("subscription")
+                            "subscription_id": new_subscription_id,
+                            "previous_subscription_id": previous_subscription_id,
                         })
                 except Exception as e:
                     logger.error(f"Error updating upgrade_requests in webhook: {e}")
@@ -465,12 +483,29 @@ async def upgrade_plan(
             raise HTTPException(404, "User not found")
         
         user_data = user_doc.to_dict()
+        org_data = None
+        org_id = user_data.get("org_id")
+
+        if org_id:
+            org_doc = db.collection("organizations").document(org_id).get()
+            if org_doc.exists:
+                org_data = org_doc.to_dict()
+                org_data["id"] = org_doc.id
+
+        if not org_data:
+            org_docs = list(
+                db.collection("organizations")
+                .where("owner_uid", "==", request_data.uid)
+                .limit(1)
+                .stream()
+            )
+            if org_docs:
+                org_data = org_docs[0].to_dict()
+                org_data["id"] = org_docs[0].id
         
         # Validate plan
         if request_data.plan_id not in PLANS:
             raise HTTPException(400, "Invalid plan ID")
-        
-        selected_plan = PLANS[request_data.plan_id]
         
         # Get price IDs from environment
         price_id = os.getenv(f"STRIPE_PRICE_{request_data.plan_id.upper()}")
@@ -496,21 +531,31 @@ async def upgrade_plan(
         
         frontend_url = os.getenv("NEXT_PUBLIC_SITE_URL", "http://localhost:3000")
         
-        session = stripe.checkout.Session.create(
-            customer_email=user_data.get("email"),
-            payment_method_types=["card"],
-            line_items=line_items,
-            mode="subscription",
-            success_url=f"{frontend_url}/billing?upgrade=success&session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=f"{frontend_url}/billing",
-            metadata={
-                "plan_id": request_data.plan_id,
-                "uid": request_data.uid,
-                "org_name": user_data.get("org_name", "Unknown"),
-                "admin_email": user_data.get("email"),
-                "upgrade_type": "plan_upgrade",
-            },
-        )
+        customer_id = org_data.get("customer_id") if org_data else None
+        previous_subscription_id = org_data.get("subscription_id") if org_data else None
+        checkout_metadata = {
+            "plan_id": request_data.plan_id,
+            "uid": request_data.uid,
+            "org_id": org_data.get("id") if org_data else "",
+            "org_name": user_data.get("org_name", "Unknown"),
+            "admin_email": user_data.get("email"),
+            "upgrade_type": "plan_upgrade",
+            "previous_subscription_id": previous_subscription_id or "",
+        }
+        session_args = {
+            "payment_method_types": ["card"],
+            "line_items": line_items,
+            "mode": "subscription",
+            "success_url": f"{frontend_url}/billing?upgrade=success&session_id={{CHECKOUT_SESSION_ID}}",
+            "cancel_url": f"{frontend_url}/billing",
+            "metadata": checkout_metadata,
+        }
+        if customer_id:
+            session_args["customer"] = customer_id
+        else:
+            session_args["customer_email"] = user_data.get("email")
+
+        session = stripe.checkout.Session.create(**session_args)
         
         logger.info(f"Stripe session created: {session.id}")
         
@@ -535,11 +580,14 @@ async def upgrade_plan(
             db.collection("upgrade_requests").add({
                 "uid": request_data.uid,
                 "plan_id": request_data.plan_id,
+                "org_id": org_data.get("id") if org_data else None,
                 "org_name": user_data.get("org_name"),
                 "admin_email": user_data.get("email"),
                 "latitude": request_data.latitude,
                 "longitude": request_data.longitude,
                 "stripe_session_id": session.id,
+                "customer_id": customer_id,
+                "previous_subscription_id": previous_subscription_id,
                 "status": "pending",
                 "created_at": datetime.utcnow(),
             })
@@ -559,12 +607,6 @@ async def upgrade_plan(
 
 @router.post("/public/record-upgrade")
 async def record_upgrade(request_data: RecordUpgradeRequest):
-    """
-    Public endpoint to record a plan upgrade in the backend database.
-    Called by Next.js after Stripe checkout is initiated.
-    
-    Records the upgrade request for database/analytics purposes.
-    """
     logger.info(f"Recording upgrade: {request_data.uid} to {request_data.plan_id}")
     
     try:
@@ -573,7 +615,17 @@ async def record_upgrade(request_data: RecordUpgradeRequest):
         
         db = get_db()
         
-        # Record upgrade in upgrade_requests collection
+        # Find the organization and store the current subscription so the
+        # old plan can be removed only after the replacement succeeds.
+        org_query = db.collection("organizations") \
+            .where("owner_uid", "==", request_data.uid) \
+            .limit(1).stream()
+        
+        org = next(org_query, None)
+        
+        org_data = org.to_dict() if org else {}
+        
+        # 📦 Record upgrade request
         db.collection("upgrade_requests").add({
             "uid": request_data.uid,
             "plan_id": request_data.plan_id,
@@ -581,18 +633,19 @@ async def record_upgrade(request_data: RecordUpgradeRequest):
             "admin_email": request_data.admin_email,
             "latitude": request_data.latitude,
             "longitude": request_data.longitude,
+            "org_id": org.id if org else None,
+            "customer_id": org_data.get("customer_id"),
+            "previous_subscription_id": org_data.get("subscription_id"),
             "status": "pending",
             "created_at": datetime.utcnow(),
         })
         
-        logger.info("Upgrade recorded in backend successfully")
         return {"status": "ok", "message": "Upgrade recorded successfully"}
         
     except Exception as err:
         logger.error(f"Failed to record upgrade: {err}")
         raise HTTPException(500, str(err))
-
-
+    
 @router.post("/public/upgrade-completed")
 async def upgrade_completed(request_data: UpgradeCompletedRequest):
     """
@@ -606,6 +659,7 @@ async def upgrade_completed(request_data: UpgradeCompletedRequest):
         admin_email = request_data.admin_email or request_data.adminEmail
         subscription_id = request_data.subscription_id or request_data.subscriptionId
         customer_id = request_data.customer_id or request_data.customerId
+        previous_subscription_id = None
 
         if not session_id:
             raise HTTPException(400, "Session ID required")
@@ -621,7 +675,9 @@ async def upgrade_completed(request_data: UpgradeCompletedRequest):
                 .stream()
             )
             if existing_request_docs:
-                plan_id = existing_request_docs[0].to_dict().get("plan_id")
+                existing_request_data = existing_request_docs[0].to_dict()
+                plan_id = existing_request_data.get("plan_id")
+                previous_subscription_id = existing_request_data.get("previous_subscription_id")
 
         if not plan_id:
             raise HTTPException(400, "Plan ID required")
@@ -672,6 +728,11 @@ async def upgrade_completed(request_data: UpgradeCompletedRequest):
                 logger.info(f"Resolved org_id={org_id} via owner_uid lookup")
 
         org_updated = False
+        update_payload = {
+            "status": "completed",
+            "completed_at": datetime.utcnow(),
+            "plan_id": plan_id
+        }
         if org_id:
             plan_info = PLANS[plan_id]
             org_update = {
@@ -690,19 +751,31 @@ async def upgrade_completed(request_data: UpgradeCompletedRequest):
             db.collection("organizations").document(org_id).set(org_update, merge=True)
             org_updated = True
             logger.info(f"Organization {org_id} updated to plan={plan_id}")
+
+            if (
+                previous_subscription_id
+                and subscription_id
+                and previous_subscription_id != subscription_id
+            ):
+                try:
+                    stripe.Subscription.delete(previous_subscription_id)
+                    logger.info(
+                        f"Cancelled previous subscription {previous_subscription_id} in upgrade completion for org {org_id}"
+                    )
+                except Exception as cancel_err:
+                    logger.warning(
+                        f"Failed to cancel previous subscription {previous_subscription_id}: {cancel_err}"
+                    )
         else:
             logger.warning(f"Could not resolve org_id for uid={uid}, email={admin_email}, customer={customer_id} — org NOT updated")
-            update_payload = {
-                "status": "completed",
-                "completed_at": datetime.utcnow(),
-                "plan_id": plan_id
-            }
         if uid:
             update_payload["uid"] = uid
         if admin_email:
             update_payload["admin_email"] = admin_email
         if subscription_id:
             update_payload["subscription_id"] = subscription_id
+        if previous_subscription_id:
+            update_payload["previous_subscription_id"] = previous_subscription_id
 
         matched_docs = list(
             db.collection("upgrade_requests")
