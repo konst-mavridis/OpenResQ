@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { auth } from "../lib/firebase";
 import { apiGet } from "../lib/api";
 import Sidebar from "../components/Sidebar";
@@ -28,6 +28,36 @@ export default function BillingPage() {
   const [error, setError] = useState<string | null>(null);
   const [upgrading, setUpgrading] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const fetchBillingStatus = useCallback(async (retries = 0) => {
+    try {
+      setLoading(true);
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) {
+        console.log("No auth token available");
+        return;
+      }
+
+      // Force fresh fetch with cache busting
+      const data = await apiGet(`/billing/status?timestamp=${Date.now()}`, token);
+      console.log("Billing status fetched:", data);
+      setStatus(data);
+      setError(null);
+    } catch (err) {
+      console.error("Error fetching billing status:", err);
+
+      // Retry up to 3 times with delay for eventual consistency
+      if (retries < 3) {
+        console.log(`Retrying status fetch (attempt ${retries + 1}/3)...`);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        return fetchBillingStatus(retries + 1);
+      }
+
+      setError("Failed to load billing status");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     const initializePage = async () => {
@@ -74,37 +104,7 @@ export default function BillingPage() {
     };
 
     initializePage();
-  }, []);
-
-  const fetchBillingStatus = async (retries = 0) => {
-    try {
-      setLoading(true);
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) {
-        console.log("No auth token available");
-        return;
-      }
-      
-      // Force fresh fetch with cache busting
-      const data = await apiGet(`/billing/status?timestamp=${Date.now()}`, token);
-      console.log("Billing status fetched:", data);
-      setStatus(data);
-      setError(null);
-    } catch (err) {
-      console.error("Error fetching billing status:", err);
-      
-      // Retry up to 3 times with delay for eventual consistency
-      if (retries < 3) {
-        console.log(`Retrying status fetch (attempt ${retries + 1}/3)...`);
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        return fetchBillingStatus(retries + 1);
-      }
-      
-      setError("Failed to load billing status");
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [fetchBillingStatus]);
 
   const getLocation = (): Promise<{ latitude: number; longitude: number }> => {
     return new Promise((resolve, reject) => {
@@ -192,7 +192,7 @@ export default function BillingPage() {
   const plans = [
     { id: "basic", name: "Basic", price: 100, color: "blue" },
     { id: "pro", name: "Pro", price: 250, color: "purple" },
-    { id: "enterprise", name: "Enterprise", price: "Contact Us", color: "emerald" },
+    { id: "enterprise", name: "Enterprise", price: null, priceLabel: "Contact Us", billingLabel: "Custom pricing", color: "emerald" },
   ];
 
   return (
@@ -281,10 +281,19 @@ export default function BillingPage() {
                   className={`bg-zinc-900/50 border ${status?.plan === p.id ? 'border-primary' : 'border-zinc-800'} rounded-3xl p-8 flex flex-col hover:border-zinc-600 transition-all duration-300`}
                 >
                   <h3 className="text-xl font-bold mb-1">{p.name}</h3>
-                  <div className="flex items-baseline gap-1 mb-6">
-                    <span className="text-3xl font-bold">€{p.price}</span>
-                    <span className="text-zinc-500">/month</span>
-                  </div>
+                  {typeof p.price === "number" ? (
+                    <div className="flex items-baseline gap-1 mb-6">
+                      <span className="text-3xl font-bold">EUR {p.price}</span>
+                      <span className="text-zinc-500">/month</span>
+                    </div>
+                  ) : (
+                    <div className="mb-6 space-y-1">
+                      <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-sm font-semibold text-emerald-300">
+                        {p.priceLabel}
+                      </span>
+                      <p className="text-sm text-zinc-500">{p.billingLabel}</p>
+                    </div>
+                  )}
                   <ul className="space-y-3 mb-8 flex-1">
                     <li className="flex items-center gap-2 text-zinc-400">
                       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-emerald-500">
