@@ -38,6 +38,7 @@ type AccessRole = "admin" | "superadmin";
 function AuthWrapper({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [role, setRole] = useState<AccessRole | null | undefined>(undefined);
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
   const isPublicPath =
@@ -48,7 +49,15 @@ function AuthWrapper({ children }: { children: ReactNode }) {
   const isSuperadminPath = pathname.startsWith("/superadmin");
 
   useEffect(() => {
+    // Set a timeout to prevent indefinite loading
+    const timeout = setTimeout(() => {
+      if (user === undefined || role === undefined) {
+        setLoadingTimeout(true);
+      }
+    }, 5000); // 5 seconds timeout
+
     const unsubscribe = onAuthStateChanged(auth, async (u: User | null) => {
+      clearTimeout(timeout);
       setUser(u);
       if (u) {
         // Fetch role from Firestore
@@ -69,11 +78,19 @@ function AuthWrapper({ children }: { children: ReactNode }) {
         setRole(undefined);
       }
     });
-    return unsubscribe;
+    return () => {
+      clearTimeout(timeout);
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
     if (user === undefined || role === undefined) {
+      if (loadingTimeout) {
+        // Timeout reached, assume no user
+        setUser(null);
+        setRole(undefined);
+      }
       return;
     }
 
@@ -102,7 +119,7 @@ function AuthWrapper({ children }: { children: ReactNode }) {
     if (isSuperadminPath) {
       router.replace("/");
     }
-  }, [isPublicPath, isSuperadminPath, pathname, role, router, user]);
+  }, [isPublicPath, isSuperadminPath, pathname, role, router, user, loadingTimeout]);
 
   // Allow login page to render without auth
   if (isPublicPath) {
@@ -110,7 +127,7 @@ function AuthWrapper({ children }: { children: ReactNode }) {
   }
 
   // Loading state (auth still checking or role still being fetched)
-  if (user === undefined || role === undefined) {
+  if ((user === undefined || role === undefined) && !loadingTimeout) {
     return (
       <div className="h-screen w-full flex items-center justify-center bg-black text-white">
         <div className="flex flex-col items-center gap-4">
