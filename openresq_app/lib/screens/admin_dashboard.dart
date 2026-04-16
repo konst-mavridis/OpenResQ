@@ -272,6 +272,53 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   }
 
   // -----------------------------
+  // REPORTS TABLE
+  // -----------------------------
+  Widget _buildReportsTable() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Recent Reports",
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: DataTable(
+            columns: const [
+              DataColumn(label: Text("ID")),
+              DataColumn(label: Text("Type")),
+              DataColumn(label: Text("Severity")),
+              DataColumn(label: Text("Status")),
+              DataColumn(label: Text("Created")),
+            ],
+            rows: reports.take(10).map((report) {
+              return DataRow(cells: [
+                DataCell(Text(report["id"]?.toString() ?? "")),
+                DataCell(Text(report["hazard_type"] ?? "")),
+                DataCell(Text(report["severity"] ?? "")),
+                DataCell(Text(report["status"] ?? "")),
+                DataCell(Text(_formatDate(report["created_at"]))),
+              ]);
+            }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _formatDate(String? dateStr) {
+    if (dateStr == null) return "";
+    try {
+      final date = DateTime.parse(dateStr);
+      return "${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute}";
+    } catch (_) {
+      return dateStr;
+    }
+  }
+
+  // -----------------------------
   // BUILD UI
   // -----------------------------
   @override
@@ -518,6 +565,10 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
             _buildCharts(),
             const SizedBox(height: 20),
             _buildHeatmap(),
+
+            const SizedBox(height: 20),
+
+            _buildReportsTable(),
 
             const SizedBox(height: 20),
 

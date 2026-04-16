@@ -16,6 +16,7 @@ from app.firebase_config import db, fcm
 from app.services.fcm_service import send_push_to_token
 from app.services.report_service import ReportService
 from app.utils.verify import verify_token, require_role
+from app.dependencies.subscription import check_report_limit
 from app.schemas.report import CreateReport, PushTokenCreate, UpdateReport, ChatMessageCreate
 from app.utils.logger import log_action
 from app.utils.ws_manager import ws_manager
@@ -187,10 +188,15 @@ def sort_reports_for_responder(reports, responder, lat, lng):
 
 
 @router.post("/", response_model=dict)
-async def create_report(data: CreateReport, user=Depends(verify_token)):
+async def create_report(
+    data: CreateReport,
+    user=Depends(verify_token),
+    org=Depends(check_report_limit)
+):
     try:
         print("[DEBUG] Received report data:", data.dict())
         print("[DEBUG] User:", user)
+        print("[DEBUG] Org:", org.get("id"))
 
         # ==========================
         # 1) INPUT VALIDATION
@@ -309,6 +315,7 @@ async def create_report(data: CreateReport, user=Depends(verify_token)):
             media=uploaded_media,
             ai_score=ai_score,
             ai_fire_detected=ai_fire_detected,
+            org_id=org.get("id")
         )
 
         print("[DEBUG] Report created:", report["id"])

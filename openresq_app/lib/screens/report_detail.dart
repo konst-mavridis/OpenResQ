@@ -31,7 +31,7 @@ class _ReportDetailState extends State<ReportDetail> {
   bool hasVoted = false;
 
   bool get isCitizenOwner => isOwner && widget.role == 'citizen';
-  bool get isStaff => widget.role == 'responder' || widget.role == 'admin';
+  bool get isStaff => widget.role == 'responder' || widget.role == 'admin' || widget.role == 'superadmin';
 
   @override
   void initState() {
@@ -440,7 +440,7 @@ class _ReportDetailState extends State<ReportDetail> {
                 const SizedBox(height: 12),
 
                 // ADMIN DELETE
-                if (widget.role == 'admin')
+                if (widget.role == 'admin' || widget.role == 'superadmin')
                   ElevatedButton(
                     onPressed: adminDelete,
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.red),

@@ -4,6 +4,7 @@ import '../services/auth_service.dart';
 import 'user_home.dart';
 import 'responder_home.dart';
 import 'admin_dashboard.dart';
+import 'super_admin_dashboard.dart';
 import 'team_leader_dashboard.dart';
 import '../services/location_service.dart'; 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -66,6 +67,7 @@ class _HomeRouterState extends State<HomeRouter> {
     }
 
     if (role == "admin") return const AdminDashboardPage();
+    if (role == "superadmin") return const SuperAdminDashboardPage();
     if (role == "responder") return const ResponderHomePage();
 
     if (role == "responder" || role == "team_leader") {

@@ -18,8 +18,9 @@ PLANS = {
     "enterprise": {
         "price_month": 1000,
         "limits": {
-            "responders": 999999,
-            "reports_per_month": 9999999,
+            # Use extremely high practical limits for enterprise so limits are effectively impossible to reach
+            "responders": 999999999,
+            "reports_per_month": 999999999,
         },
         "features": ["all"],
     },

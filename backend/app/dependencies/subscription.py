@@ -84,3 +84,34 @@ async def check_responder_limit(org: dict = Depends(get_current_org)):
             detail=f"Responder limit reached ({current_count}/{limit}). Please upgrade your plan."
         )
     return org
+
+async def check_report_limit(org: dict = Depends(get_current_org)):
+    """
+    Dependency to check if organization has reached its reports-per-month limit.
+    """
+    limit = org.get("limits", {}).get("reports_per_month")
+    if limit is None:
+        plan_key = org.get("plan", "basic")
+        limit = PLANS.get(plan_key, {}).get("limits", {}).get("reports_per_month", 1000)
+
+    db = get_db()
+    current_month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    report_count_query = db.collection("reports") \
+        .where("org_id", "==", org["id"]) \
+        .where("created_at", ">=", current_month_start).count()
+    report_count_result = report_count_query.get()
+
+    current_count = 0
+    try:
+        if report_count_result and len(report_count_result) > 0 and len(report_count_result[0]) > 0:
+            current_count = int(report_count_result[0][0].value)
+    except Exception:
+        current_count = 0
+
+    if current_count >= limit:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Monthly report limit reached ({current_count}/{limit}). Please upgrade your plan."
+        )
+
+    return org

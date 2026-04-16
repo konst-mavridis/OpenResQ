@@ -176,7 +176,8 @@ class ReportService:
         longitude: float,
         media: Optional[List[Dict[str, Any]]] = None,
         ai_score: Optional[float] = 0.0,
-        ai_fire_detected: Optional[bool] = False
+        ai_fire_detected: Optional[bool] = False,
+        org_id: Optional[str] = None
     ):
         try:
             uploaded_media = []
@@ -191,6 +192,7 @@ class ReportService:
             report_data = {
                 "id": str(uuid.uuid4()),
                 "uid": user_id,
+                "org_id": org_id,
                 "title": title,
                 "description": description,
                 "event_type": event_type,
