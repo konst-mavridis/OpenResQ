@@ -7,6 +7,7 @@ import ReportsGoogleMap from "../components/GoogleMap";
 import { apiGet } from "../lib/api";
 import { auth } from "../lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
+import PublicLegalFooter from "../components/legal/PublicLegalFooter";
 
 interface Incident {
   id: string;
@@ -126,7 +127,7 @@ export default function AnalyticsPage() {
       <div className="flex-1 flex flex-col">
         <Topbar />
 
-        <main className="p-8 space-y-6">
+        <main className="flex-1 p-8 space-y-6">
           <h1 className="text-2xl font-semibold">Analytics</h1>
 
           <div className="grid gap-6 md:grid-cols-2">
@@ -216,7 +217,7 @@ export default function AnalyticsPage() {
                     reports={filteredReports.map((entry) => entry.report)}
                     heatmap
                   />
-                  <div className="mt-2 text-xs text-gray-600">
+                  <div className="mt-0.8 text-xs text-gray-600">
                     Red/orange clusters indicate high incident density.
                   </div>
                 </div>
@@ -224,6 +225,9 @@ export default function AnalyticsPage() {
             </div>
           </div>
         </main>
+        <div className="mt-auto w-full border-t border-white/10 p-4 text-center text-xs text-zinc-500">
+          <PublicLegalFooter />
+        </div>
       </div>
     </div>
   );

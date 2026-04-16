@@ -5,6 +5,7 @@ import { auth } from "../lib/firebase";
 import { apiGet } from "../lib/api";
 import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
+import PublicLegalFooter from "../components/legal/PublicLegalFooter";
 
 interface BillingStatus {
   plan: string;
@@ -339,6 +340,9 @@ export default function BillingPage() {
             Need a custom plan for your city or enterprise? <button className="text-primary hover:underline">Contact our sales team</button>.
           </p>
         </main>
+        <div className="w-full border-t border-white/10 p-4 text-center text-xs text-zinc-500">
+          <PublicLegalFooter />
+        </div>
       </div>
     </div>
   );

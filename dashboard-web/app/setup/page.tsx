@@ -3,13 +3,19 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import PublicLegalFooter from "../components/legal/PublicLegalFooter";
+
+interface OrganizationData {
+  orgName?: string;
+  adminEmail?: string;
+}
 
 export default function SetupPage() {
   const [step, setStep] = useState(1); // 1: ID, 2: Password
   const [customerId, setCustomerId] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [orgData, setOrgData] = useState<any>(null);
+  const [orgData, setOrgData] = useState<OrganizationData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -34,7 +40,7 @@ export default function SetupPage() {
       } else {
         setError(data.detail || "Invalid Customer ID");
       }
-    } catch (err) {
+    } catch {
       setError("Failed to verify Customer ID. Please try again.");
     } finally {
       setLoading(false);
@@ -71,7 +77,7 @@ export default function SetupPage() {
       } else {
         setError(data.detail || "Failed to setup account");
       }
-    } catch (err) {
+    } catch {
       setError("An error occurred during setup. Please try again.");
     } finally {
       setLoading(false);
@@ -80,46 +86,51 @@ export default function SetupPage() {
 
   if (success) {
     return (
-      <div className="h-screen w-full flex items-center justify-center bg-black text-white px-6">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="max-w-md w-full p-8 rounded-3xl bg-zinc-900 border border-zinc-800 text-center"
-        >
-          <div className="w-16 h-16 bg-green-500/20 text-green-500 rounded-full flex items-center justify-center mx-auto mb-6 text-3xl">
-            ✓
-          </div>
-          <h1 className="text-2xl font-bold mb-4">Setup Complete!</h1>
-          <p className="text-zinc-400 mb-8">
-            Your organization account has been created. You can now login with your email and the password you just set.
-          </p>
-          <Link 
-            href="/login"
-            className="block w-full py-4 rounded-xl bg-primary text-white font-bold bg-blue-600 hover:bg-blue-500 transition shadow-lg shadow-blue-900/20"
+      <div className="min-h-screen w-full flex flex-col bg-black text-white">
+        <div className="flex flex-1 items-center justify-center px-6 py-10">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="max-w-md w-full p-8 rounded-3xl bg-zinc-900 border border-zinc-800 text-center"
           >
-            Go to Login
-          </Link>
-        </motion.div>
+            <div className="w-16 h-16 bg-green-500/20 text-green-500 rounded-full flex items-center justify-center mx-auto mb-6 text-3xl">
+              ✓
+            </div>
+            <h1 className="text-2xl font-bold mb-4">Setup Complete!</h1>
+            <p className="text-zinc-400 mb-8">
+              Your organization account has been created. You can now login with your email and the password you just set.
+            </p>
+            <Link 
+              href="/login"
+              className="block w-full py-4 rounded-xl bg-primary text-white font-bold bg-blue-600 hover:bg-blue-500 transition shadow-lg shadow-blue-900/20"
+            >
+              Go to Login
+            </Link>
+          </motion.div>
+        </div>
+        <div className="w-full border-t border-white/10 px-4 py-4 text-center text-xs text-zinc-500">
+          <PublicLegalFooter />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen w-full flex items-center justify-center relative overflow-hidden bg-black text-white px-6">
+    <div className="min-h-screen w-full flex flex-col relative overflow-hidden bg-black text-white">
       {/* Background decoration */}
       <div className="absolute inset-0 bg-gradient-to-br from-[#020617] via-[#0f172a] to-[#020617]" />
-      
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="relative z-10 w-[450px] p-8 rounded-3xl shadow-2xl border border-white/10 bg-white/5 backdrop-blur-2xl"
-      >
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold tracking-tight">Setup OpenResQ</h1>
-          <p className="text-zinc-400 text-sm mt-2">
-            Initialize your organization's environment
-          </p>
-        </div>
+      <div className="relative z-10 flex flex-1 items-center justify-center px-6 py-10">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-[450px] max-w-full p-8 rounded-3xl shadow-2xl border border-white/10 bg-white/5 backdrop-blur-2xl"
+        >
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold tracking-tight">Setup OpenResQ</h1>
+            <p className="text-zinc-400 text-sm mt-2">
+              Initialize your organization&apos;s environment
+            </p>
+          </div>
 
         <AnimatePresence mode="wait">
           {step === 1 ? (
@@ -221,8 +232,12 @@ export default function SetupPage() {
               </button>
             </motion.form>
           )}
-        </AnimatePresence>
-      </motion.div>
+          </AnimatePresence>
+        </motion.div>
+      </div>
+      <div className="relative z-10 mt-auto w-full border-t border-white/10 px-4 py-4 text-center text-xs text-zinc-500">
+        <PublicLegalFooter />
+      </div>
     </div>
   );
 }

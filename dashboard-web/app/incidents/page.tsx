@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
+import PublicLegalFooter from "../components/legal/PublicLegalFooter";
 import { apiGet } from "../lib/api";
 import { auth } from "../lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
@@ -61,7 +62,7 @@ export default function IncidentsPage() {
       <div className="flex-1 flex flex-col">
         <Topbar />
 
-        <main className="p-8 space-y-6">
+        <main className="flex-1 p-8 space-y-6">
           <h1 className="text-2xl font-semibold">Nearby Incidents</h1>
 
           {loading && <p className="text-foreground/60">Loading…</p>}
@@ -93,6 +94,9 @@ export default function IncidentsPage() {
             </div>
           )}
         </main>
+        <div className="mt-auto w-full border-t border-white/10 p-4 text-center text-xs text-zinc-500">
+          <PublicLegalFooter />
+        </div>
       </div>
     </div>
   );

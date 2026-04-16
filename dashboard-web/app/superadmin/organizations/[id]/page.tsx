@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { auth } from "../../../lib/firebase";
 import { apiGet, apiPost } from "../../../lib/api";
 import Sidebar from "../../../components/Sidebar";
 import Topbar from "../../../components/Topbar";
 import { useParams, useRouter } from "next/navigation";
+import PublicLegalFooter from "../../../components/legal/PublicLegalFooter";
 
 interface Organization {
   id: string;
@@ -17,7 +18,14 @@ interface Organization {
     responders: number;
     reports_per_month: number;
   };
-  payments?: any[];
+  payments?: PaymentRecord[];
+}
+
+interface PaymentRecord {
+  created_at: string;
+  amount: number;
+  type: string;
+  source: string;
 }
 
 export default function OrganizationDetailsPage() {
@@ -34,11 +42,7 @@ export default function OrganizationDetailsPage() {
   const [responders, setResponders] = useState(0);
   const [reports, setReports] = useState(0);
 
-  useEffect(() => {
-    fetchOrganization();
-  }, [id]);
-
-  const fetchOrganization = async () => {
+  const fetchOrganization = useCallback(async () => {
     try {
       const token = await auth.currentUser?.getIdToken();
       if (!token) return;
@@ -54,7 +58,11 @@ export default function OrganizationDetailsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    fetchOrganization();
+  }, [fetchOrganization]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -214,6 +222,9 @@ export default function OrganizationDetailsPage() {
             </div>
           </div>
         </main>
+        <div className="w-full border-t border-white/10 p-4 text-center text-xs text-zinc-500">
+          <PublicLegalFooter />
+        </div>
       </div>
     </div>
   );

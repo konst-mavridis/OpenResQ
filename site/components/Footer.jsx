@@ -75,7 +75,7 @@ export default function Footer() {
             <li><a href="https://github.com" target="_blank" className="hover:text-primary">GitHub</a></li>
             <li><a href="https://twitter.com" target="_blank" className="hover:text-primary">X (Twitter)</a></li>
             <li><a href="https://linkedin.com" target="_blank" className="hover:text-primary">LinkedIn</a></li>
-            <li><a href="mailto:contact@openresq.org" className="hover:text-primary">Contact</a></li>
+            <li><a href="mailto:openresq.info@gmail.com" className="hover:text-primary">Contact</a></li>
           </ul>
         </div>
 
@@ -116,10 +116,15 @@ export default function Footer() {
         </div>
       </div>
 
-      <div className="border-t border-neutral-200 dark:border-neutral-800 py-6 text-center text-sm text-neutral-500 dark:text-neutral-400">
-        © {new Date().getFullYear()} OpenResQ ·
-        <Link href="/privacy" className="ml-2 hover:text-primary">Privacy</Link> ·
-        <Link href="/terms" className="ml-2 hover:text-primary">Terms</Link>
+      <div className="border-t border-neutral-200 dark:border-neutral-800 py-6 text-center text-sm text-neutral-500 dark:text-neutral-400 font-medium">
+        © {new Date().getFullYear()} OpenResQ • Empowering First Responders
+        <div className="mt-2 flex items-center justify-center gap-4">
+          <Link href="/privacy" className="hover:text-primary transition">Privacy Policy</Link>
+          <span className="text-neutral-300 dark:text-neutral-700">•</span>
+          <Link href="/terms" className="hover:text-primary transition">Terms of Service</Link>
+          <span className="text-neutral-300 dark:text-neutral-700">•</span>
+          <Link href="/cookies" className="hover:text-primary transition">Cookie Policy</Link>
+        </div>
       </div>
     </footer>
   );

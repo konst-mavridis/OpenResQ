@@ -1,6 +1,7 @@
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import CookieBanner from "@/components/CookieBanner";
 
 export const metadata = {
   title: "OpenResQ",
@@ -12,6 +13,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="scroll-smooth bg-white">
       <body className="bg-white text-gray-900">
         <Navbar />
+        <CookieBanner />
         {children}
         <Footer />
       </body>

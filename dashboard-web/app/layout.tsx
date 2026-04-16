@@ -5,6 +5,7 @@ import "./globals.css";
 import type { ReactNode } from "react";
 import { ThemeProvider } from "./lib/ThemeContext";
 import { getThemeScript } from "./lib/theme-script";
+import CookieBanner from "./components/legal/CookieBanner";
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
@@ -17,6 +18,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
       <body>
         <ThemeProvider>
+          <CookieBanner />
           <AuthWrapper>{children}</AuthWrapper>
         </ThemeProvider>
       </body>
@@ -36,6 +38,11 @@ function AuthWrapper({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null); // null = checking role
   const router = useRouter();
   const pathname = usePathname();
+  const isPublicPath =
+    pathname === "/login" ||
+    pathname === "/privacy" ||
+    pathname === "/terms" ||
+    pathname === "/cookies";
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (u: User | null) => {
@@ -62,19 +69,23 @@ function AuthWrapper({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (user === null && pathname !== "/login") {
+    if (isPublicPath) {
+      return;
+    }
+
+    if (user === null) {
       console.log("No user, redirecting to /login");
       router.push("/login");
-    } else if (user && isAdmin === false && pathname !== "/login") {
+    } else if (user && isAdmin === false) {
       // User is logged in but not an admin
       console.log("User is not admin, logging out");
       signOut(auth);
       router.push("/login?error=not-authorized");
     }
-  }, [user, isAdmin, pathname, router]);
+  }, [isPublicPath, user, isAdmin, router]);
 
   // Allow login page to render without auth
-  if (pathname === "/login") {
+  if (isPublicPath) {
     return children;
   }
 

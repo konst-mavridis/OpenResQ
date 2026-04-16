@@ -5,6 +5,28 @@ import Stripe from "stripe";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
 
+function resolveSiteOrigin(req: Request) {
+  const configuredUrl =
+    process.env.SITE_URL?.trim() || process.env.NEXT_PUBLIC_SITE_URL?.trim();
+
+  if (configuredUrl) {
+    const normalizedUrl = /^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//.test(configuredUrl)
+      ? configuredUrl
+      : `https://${configuredUrl}`;
+
+    try {
+      return new URL(normalizedUrl).origin;
+    } catch (error) {
+      console.warn("Invalid site URL configuration, falling back to request origin", {
+        configuredUrl,
+        error,
+      });
+    }
+  }
+
+  return new URL(req.url).origin;
+}
+
 export async function POST(req: Request) {
   console.log("Upgrade Plan API Hit");
   try {
@@ -90,13 +112,15 @@ export async function POST(req: Request) {
       });
     }
 
+    const siteOrigin = resolveSiteOrigin(req);
+
     const session = await stripe.checkout.sessions.create({
       ...(customerId ? { customer: customerId } : { customer_email: email }),
       payment_method_types: ["card"],
       line_items: lineItems,
       mode: "subscription",
-      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/billing?upgrade=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/billing`,
+      success_url: `${siteOrigin}/billing?upgrade=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${siteOrigin}/billing`,
       metadata: {
         planId,
         uid,
@@ -149,4 +173,3 @@ export async function POST(req: Request) {
     );
   }
 }
-

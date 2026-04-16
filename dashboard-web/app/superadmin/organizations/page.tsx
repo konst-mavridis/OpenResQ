@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { auth } from "../../lib/firebase";
-import { apiGet, apiPost } from "../../lib/api";
+import { apiGet } from "../../lib/api";
 import Sidebar from "../../components/Sidebar";
 import Topbar from "../../components/Topbar";
 import Link from "next/link";
+import PublicLegalFooter from "../../components/legal/PublicLegalFooter";
 
 interface Organization {
   id: string;
@@ -17,7 +18,7 @@ interface Organization {
     responders: number;
     reports_per_month: number;
   };
-  created_at?: any;
+  created_at?: string | null;
 }
 
 export default function SuperadminOrganizationsPage() {
@@ -25,11 +26,7 @@ export default function SuperadminOrganizationsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchOrganizations();
-  }, []);
-
-  const fetchOrganizations = async () => {
+  const fetchOrganizations = useCallback(async () => {
     try {
       const token = await auth.currentUser?.getIdToken();
       if (!token) return;
@@ -41,7 +38,11 @@ export default function SuperadminOrganizationsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchOrganizations();
+  }, [fetchOrganizations]);
 
   if (loading) {
     return (
@@ -135,6 +136,9 @@ export default function SuperadminOrganizationsPage() {
             )}
           </div>
         </main>
+        <div className="w-full border-t border-white/10 p-4 text-center text-xs text-zinc-500">
+          <PublicLegalFooter />
+        </div>
       </div>
     </div>
   );

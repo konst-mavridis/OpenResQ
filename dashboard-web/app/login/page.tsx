@@ -6,7 +6,7 @@ import { auth, db } from "../lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 import { motion } from "framer-motion";
-import Link from "next/link";
+import PublicLegalFooter from "../components/legal/PublicLegalFooter";
 
 export default function LoginPage() {
   const [loginMethod, setLoginMethod] = useState<"email" | "id">("email");
@@ -99,7 +99,7 @@ export default function LoginPage() {
       } else {
         setError(data.detail || "Invalid Customer ID");
       }
-    } catch (err) {
+    } catch {
       setError("Failed to verify ID");
     } finally {
       setLoading(false);
@@ -170,7 +170,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="h-screen w-full flex items-center justify-center relative overflow-hidden bg-black">
+    <div className="min-h-screen w-full flex flex-col relative overflow-hidden bg-black">
 
       {/* Gradient Glow */}
       <div className="absolute inset-0 bg-gradient-to-br from-[#020617] via-[#0f172a] to-[#020617]" />
@@ -189,69 +189,70 @@ export default function LoginPage() {
       />
 
       {/* Card */}
-      <motion.div
-        initial={{ opacity: 0, y: 40 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="relative z-10 w-[400px] p-8 rounded-3xl shadow-[0_0_40px_rgba(0,0,0,0.6)] border border-white/10 bg-white/5 backdrop-blur-2xl"
-      >
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-white tracking-tight">
-            OpenResQ
-          </h1>
-          <p className="text-white/50 text-sm mt-1">
-            {isNewId ? "Finish Account Setup" : "Admin Control Panel"}
-          </p>
-        </div>
-
-        {/* Tab Switcher (only if not in setup mode) */}
-        {!isNewId && (
-          <div className="flex bg-white/5 p-1 rounded-xl mb-6 border border-white/5">
-            <button
-              onClick={() => setLoginMethod("email")}
-              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition ${loginMethod === "email" ? "bg-white/10 text-white" : "text-white/40 hover:text-white/60"}`}
-            >
-              Email
-            </button>
-            <button
-              onClick={() => setLoginMethod("id")}
-              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition ${loginMethod === "id" ? "bg-white/10 text-white" : "text-white/40 hover:text-white/60"}`}
-            >
-              Customer ID
-            </button>
+      <div className="relative z-10 flex flex-1 items-center justify-center px-4 py-10">
+        <motion.div
+          initial={{ opacity: 0, y: 40 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="w-[400px] max-w-full rounded-3xl border border-white/10 bg-white/5 p-8 shadow-[0_0_40px_rgba(0,0,0,0.6)] backdrop-blur-2xl"
+        >
+          {/* Header */}
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-white tracking-tight">
+              OpenResQ
+            </h1>
+            <p className="text-white/50 text-sm mt-1">
+              {isNewId ? "Finish Account Setup" : "Admin Control Panel"}
+            </p>
           </div>
-        )}
 
-        <form onSubmit={loginMethod === "id" && !email ? handleIdCheck : handleLogin}>
-          {/* Inputs */}
-          <div className="space-y-5">
-            {loginMethod === "email" ? (
-              <div>
-                <label className="text-xs text-white/50">Email</label>
-                <input
-                  type="email"
-                  className="mt-1 w-full px-4 py-3 rounded-xl bg-white/10 text-white placeholder-white/40 border border-white/20 focus:outline-none focus:ring-2 focus:ring-primary/60 focus:border-transparent transition"
-                  placeholder="admin@openresq.io"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-            ) : (
-              <div>
-                <label className="text-xs text-white/50">Customer ID</label>
-                <input
-                  type="text"
-                  disabled={!!email}
-                  className="mt-1 w-full px-4 py-3 rounded-xl bg-white/10 text-white placeholder-zinc-500 border border-white/20 focus:outline-none focus:ring-2 focus:ring-primary/60 focus:border-transparent transition font-mono uppercase"
-                  placeholder="CUST-XXXXXXXX"
-                  value={customerId}
-                  onChange={(e) => setCustomerId(e.target.value)}
-                  required
-                />
-              </div>
-            )}
+          {/* Tab Switcher (only if not in setup mode) */}
+          {!isNewId && (
+            <div className="flex bg-white/5 p-1 rounded-xl mb-6 border border-white/5">
+              <button
+                onClick={() => setLoginMethod("email")}
+                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition ${loginMethod === "email" ? "bg-white/10 text-white" : "text-white/40 hover:text-white/60"}`}
+              >
+                Email
+              </button>
+              <button
+                onClick={() => setLoginMethod("id")}
+                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition ${loginMethod === "id" ? "bg-white/10 text-white" : "text-white/40 hover:text-white/60"}`}
+              >
+                Customer ID
+              </button>
+            </div>
+          )}
+
+          <form onSubmit={loginMethod === "id" && !email ? handleIdCheck : handleLogin}>
+            {/* Inputs */}
+            <div className="space-y-5">
+              {loginMethod === "email" ? (
+                <div>
+                  <label className="text-xs text-white/50">Email</label>
+                  <input
+                    type="email"
+                    className="mt-1 w-full px-4 py-3 rounded-xl bg-white/10 text-white placeholder-white/40 border border-white/20 focus:outline-none focus:ring-2 focus:ring-primary/60 focus:border-transparent transition"
+                    placeholder="admin@openresq.io"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label className="text-xs text-white/50">Customer ID</label>
+                  <input
+                    type="text"
+                    disabled={!!email}
+                    className="mt-1 w-full px-4 py-3 rounded-xl bg-white/10 text-white placeholder-zinc-500 border border-white/20 focus:outline-none focus:ring-2 focus:ring-primary/60 focus:border-transparent transition font-mono uppercase"
+                    placeholder="CUST-XXXXXXXX"
+                    value={customerId}
+                    onChange={(e) => setCustomerId(e.target.value)}
+                    required
+                  />
+                </div>
+              )}
 
             {(email || loginMethod === "email") && (
               <div>
@@ -340,16 +341,16 @@ export default function LoginPage() {
                 </button>
               </>
             )}
-          </div>
-        </form>
-
-        {/* Footer */}
-        <div className="mt-8">
-          <p className="text-center text-white/30 text-xs text-zinc-500">
-            © {new Date().getFullYear()} OpenResQ • Secure Access
-          </p>
-        </div>
-      </motion.div>
+            </div>
+          </form>
+        </motion.div>
+      </div>
+      <div className="relative z-10 mt-auto w-full border-t border-white/10 px-4 py-4 text-center text-xs text-zinc-500">
+        <p className="mb-3 text-center text-white/30 text-xs text-zinc-500">
+          Secure access to the OpenResQ admin dashboard.
+        </p>
+        <PublicLegalFooter />
+      </div>
     </div>
   );
 }

@@ -6,8 +6,8 @@ import Topbar from "./components/Topbar";
 import { apiGet } from "./lib/api";
 import { auth } from "./lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
-import ReportsMap from "./components/GoogleMap";
 import ReportsGoogleMap from "./components/GoogleMap";
+import PublicLegalFooter from "./components/legal/PublicLegalFooter";
 
 export default function DashboardHome() {
   const [reports, setReports] = useState([]);
@@ -43,7 +43,7 @@ export default function DashboardHome() {
       <div className="flex-1 flex flex-col">
         <Topbar />
 
-        <main className="p-8 space-y-8">
+        <main className="flex-1 p-8 space-y-8">
           <h1 className="text-3xl font-semibold">Dashboard</h1>
 
           <div className="grid md:grid-cols-4 gap-4">
@@ -62,6 +62,9 @@ export default function DashboardHome() {
           </div>
 
         </main>
+        <div className="mt-auto w-full border-t border-white/10 p-4 text-center text-xs text-zinc-500">
+          <PublicLegalFooter />
+        </div>
       </div>
     </div>
   );

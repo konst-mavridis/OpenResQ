@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Sidebar from "../../../components/Sidebar";
 import Topbar from "../../../components/Topbar";
+import PublicLegalFooter from "../../../components/legal/PublicLegalFooter";
 import { apiGet, apiPost } from "../../../lib/api";
 import { auth } from "../../../lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
@@ -15,7 +16,12 @@ interface TeamDetails {
   displayName: string;
   leader_uid: string;
   leader_name?: string;
-  members: any[];
+  members: TeamMember[];
+}
+
+interface TeamMember {
+  uid: string;
+  name: string;
 }
 
 export default function ManageTeamPage() {
@@ -39,7 +45,7 @@ export default function ManageTeamPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const fetchTeamDetails = async (user: User) => {
+  const fetchTeamDetails = useCallback(async (user: User) => {
     try {
       setLoading(true);
       setError("");
@@ -56,7 +62,7 @@ export default function ManageTeamPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [teamId]);
 
   const handleSave = async () => {
     if (!displayName || !leaderUid) {
@@ -103,7 +109,7 @@ export default function ManageTeamPage() {
       }
     });
     return unsubscribe;
-  }, [teamId]);
+  }, [fetchTeamDetails]);
 
   return (
     <div className="flex h-full">
@@ -111,7 +117,7 @@ export default function ManageTeamPage() {
       <div className="flex-1 flex flex-col">
         <Topbar />
 
-        <main className="p-8 space-y-6">
+        <main className="flex-1 p-8 space-y-6">
           <div className="flex justify-between items-center">
             <div>
               <Link href={`/teams/${teamId}`} className="text-sm text-foreground/60 hover:underline mb-2 inline-block">
@@ -204,6 +210,9 @@ export default function ManageTeamPage() {
              </div>
           )}
         </main>
+        <div className="mt-auto w-full border-t border-white/10 p-4 text-center text-xs text-zinc-500">
+          <PublicLegalFooter />
+        </div>
       </div>
     </div>
   );

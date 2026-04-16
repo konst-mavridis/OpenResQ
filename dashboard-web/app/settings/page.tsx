@@ -6,6 +6,7 @@ import { apiPost, apiDelete } from "../lib/api";
 import { useTheme } from "../lib/ThemeContext";
 import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
+import PublicLegalFooter from "../components/legal/PublicLegalFooter";
 
 export default function SettingsPage() {
   const { theme, setTheme, actualTheme } = useTheme();
@@ -90,7 +91,7 @@ export default function SettingsPage() {
       <div className="flex-1 flex flex-col">
         <Topbar />
 
-        <main className="p-8 space-y-8">
+        <main className="flex-1 p-8 space-y-8">
           <h1 className="text-2xl font-semibold">Settings</h1>
 
           <section className="bg-(--background) border border-border rounded-xl p-6 space-y-4 max-w-xl">
@@ -154,6 +155,9 @@ export default function SettingsPage() {
             </div>
           </section>
         </main>
+        <div className="mt-auto w-full border-t border-white/10 p-4 text-center text-xs text-zinc-500">
+          <PublicLegalFooter />
+        </div>
       </div>
     </div>
   );

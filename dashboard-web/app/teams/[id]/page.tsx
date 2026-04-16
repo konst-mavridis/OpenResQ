@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import Sidebar from "../../components/Sidebar";
 import Topbar from "../../components/Topbar";
+import PublicLegalFooter from "../../components/legal/PublicLegalFooter";
 import { apiGet } from "../../lib/api";
 import { auth } from "../../lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
@@ -38,7 +39,7 @@ export default function TeamDetailsPage() {
     document.title = title;
   }, [team?.displayName]);
 
-  const fetchTeamDetails = async (user: User) => {
+  const fetchTeamDetails = useCallback(async (user: User) => {
     try {
       setLoading(true);
       setError("");
@@ -53,7 +54,7 @@ export default function TeamDetailsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [teamId]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -64,7 +65,7 @@ export default function TeamDetailsPage() {
       }
     });
     return unsubscribe;
-  }, [teamId]);
+  }, [fetchTeamDetails]);
 
   return (
     <div className="flex h-full">
@@ -72,7 +73,7 @@ export default function TeamDetailsPage() {
       <div className="flex-1 flex flex-col">
         <Topbar />
 
-        <main className="p-8 space-y-6">
+        <main className="flex-1 p-8 space-y-6">
           <div className="flex justify-between items-center">
             <div>
               <Link href="/teams" className="text-sm text-foreground/60 hover:underline mb-2 inline-block">
@@ -157,6 +158,9 @@ export default function TeamDetailsPage() {
             </div>
           ) : null}
         </main>
+        <div className="mt-auto w-full border-t border-white/10 p-4 text-center text-xs text-zinc-500">
+          <PublicLegalFooter />
+        </div>
       </div>
     </div>
   );
