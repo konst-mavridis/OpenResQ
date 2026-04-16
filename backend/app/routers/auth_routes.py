@@ -65,7 +65,7 @@ def delete_current_user(user=Depends(verify_token)):
 def set_user_role(
     uid: str,
     role: str,
-    admin=Depends(require_role("admin"))
+    admin=Depends(require_role("admin") | require_role("superadmin"))
 ):
     """
     Set user role (admin only).

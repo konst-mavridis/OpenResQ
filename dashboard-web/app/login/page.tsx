@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import { login, loginWithGoogle } from "../lib/auth";
 import { auth, db } from "../lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { motion } from "framer-motion";
 import PublicLegalFooter from "../components/legal/PublicLegalFooter";
+
+type AccessRole = "admin" | "superadmin";
 
 export default function LoginPage() {
   const [loginMethod, setLoginMethod] = useState<"email" | "id">("email");
@@ -27,11 +29,25 @@ export default function LoginPage() {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) window.location.href = "/";
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) return;
+
+      const redirectPath = await getRedirectPath(user.uid);
+      window.location.href = redirectPath;
     });
     return unsubscribe;
   }, []);
+
+  async function getRedirectPath(uid: string) {
+    try {
+      const userDoc = await getDoc(doc(db, "users", uid));
+      const role = userDoc.data()?.role as AccessRole | undefined;
+      return role === "superadmin" ? "/superadmin/organizations" : "/";
+    } catch (err) {
+      console.error("Error fetching user role for redirect:", err);
+      return "/";
+    }
+  }
 
   async function storeUserLocation(uid: string) {
     return new Promise<void>((resolve) => {
@@ -137,7 +153,8 @@ export default function LoginPage() {
         await storeUserLocation(user.uid);
       }
       
-      window.location.href = "/";
+      const redirectPath = user ? await getRedirectPath(user.uid) : "/";
+      window.location.href = redirectPath;
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : "Invalid credentials";
       console.error(err);
@@ -160,7 +177,8 @@ export default function LoginPage() {
         await storeUserLocation(user.uid);
       }
       
-      window.location.href = "/";
+      const redirectPath = user ? await getRedirectPath(user.uid) : "/";
+      window.location.href = redirectPath;
     } catch (err) {
       console.error(err);
       setError("Failed to sign in with Google");

@@ -3,9 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { auth } from "../lib/firebase";
 import { apiGet } from "../lib/api";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "../lib/firebase";
 import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
 import PublicLegalFooter from "../components/legal/PublicLegalFooter";
+import Link from "next/link";
 
 interface BillingStatus {
   plan: string;
@@ -23,8 +26,25 @@ interface BillingStatus {
   features: string[];
 }
 
+interface OrganizationSummary {
+  id: string;
+  name: string;
+  plan: string;
+  subscription_status: string;
+  manual_override: boolean;
+  limits: {
+    responders: number;
+    reports_per_month: number;
+  };
+  created_at?: string | null;
+}
+
+type AccessRole = "admin" | "superadmin";
+
 export default function BillingPage() {
+  const [role, setRole] = useState<AccessRole | null>(null);
   const [status, setStatus] = useState<BillingStatus | null>(null);
+  const [organizations, setOrganizations] = useState<OrganizationSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [upgrading, setUpgrading] = useState<string | null>(null);
@@ -60,8 +80,48 @@ export default function BillingPage() {
     }
   }, []);
 
+  const fetchSuperadminBilling = useCallback(async () => {
+    try {
+      setLoading(true);
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) {
+        return;
+      }
+
+      const data = await apiGet("/superadmin/billing/organizations", token);
+      setOrganizations(data);
+      setError(null);
+    } catch (err) {
+      console.error("Error fetching superadmin billing overview:", err);
+      setError("Failed to load organization billing overview");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     const initializePage = async () => {
+      const user = auth.currentUser;
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        const userRole = userDoc.data()?.role as AccessRole | undefined;
+        const resolvedRole = userRole === "superadmin" ? "superadmin" : "admin";
+        setRole(resolvedRole);
+
+        if (resolvedRole === "superadmin") {
+          await fetchSuperadminBilling();
+          return;
+        }
+      } catch (err) {
+        console.error("Error determining billing role:", err);
+        setRole("admin");
+      }
+
       // Check for upgrade success
       const params = new URLSearchParams(window.location.search);
       const upgradeSuccess = params.get("upgrade");
@@ -105,7 +165,7 @@ export default function BillingPage() {
     };
 
     initializePage();
-  }, [fetchBillingStatus]);
+  }, [fetchBillingStatus, fetchSuperadminBilling]);
 
   const getLocation = (): Promise<{ latitude: number; longitude: number }> => {
     return new Promise((resolve, reject) => {
@@ -195,6 +255,169 @@ export default function BillingPage() {
     { id: "pro", name: "Pro", price: 250, color: "purple" },
     { id: "enterprise", name: "Enterprise", price: null, priceLabel: "Contact Us", billingLabel: "Custom pricing", color: "emerald" },
   ];
+
+  if (role === "superadmin") {
+    const activeOrganizations = organizations.filter((org) => org.subscription_status === "active");
+    const flaggedOrganizations = organizations.filter(
+      (org) => org.manual_override || org.subscription_status !== "active"
+    );
+    const manualOverrides = organizations.filter((org) => org.manual_override);
+    const planBreakdown = plans.map((plan) => ({
+      ...plan,
+      count: organizations.filter((org) => org.plan === plan.id).length,
+    }));
+
+    return (
+      <div className="flex bg-black min-h-screen text-white">
+        <Sidebar className="hidden lg:block w-64" />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Topbar title="Billing Oversight" />
+          <main className="flex-1 overflow-y-auto p-6 space-y-8">
+            {error && (
+              <div className="bg-red-500/20 border border-red-500 text-red-300 px-4 py-3 rounded-xl">
+                {error}
+              </div>
+            )}
+
+            <section className="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-8 backdrop-blur-xl">
+              <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
+                <div>
+                  <h2 className="text-3xl font-bold">Organization Billing Control Center</h2>
+                  <p className="text-zinc-400 mt-2 max-w-3xl">
+                    Monitor subscription health across every customer organization, surface exceptions,
+                    and jump directly into manual subscription controls when something needs attention.
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => fetchSuperadminBilling()}
+                    className="bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded-xl text-sm transition"
+                  >
+                    Refresh Overview
+                  </button>
+                  <Link
+                    href="/superadmin/organizations"
+                    className="bg-white text-black px-4 py-2 rounded-xl text-sm font-semibold hover:bg-zinc-200 transition"
+                  >
+                    Open Organization Console
+                  </Link>
+                </div>
+              </div>
+            </section>
+
+            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5">
+                <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Organizations</p>
+                <p className="mt-3 text-3xl font-bold">{organizations.length}</p>
+                <p className="mt-2 text-sm text-zinc-400">{activeOrganizations.length} currently active</p>
+              </div>
+              <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5">
+                <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Flagged Accounts</p>
+                <p className="mt-3 text-3xl font-bold text-amber-400">{flaggedOrganizations.length}</p>
+                <p className="mt-2 text-sm text-zinc-400">Inactive, canceled, past due, or manually overridden</p>
+              </div>
+              <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5">
+                <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Manual Overrides</p>
+                <p className="mt-3 text-3xl font-bold text-sky-400">{manualOverrides.length}</p>
+                <p className="mt-2 text-sm text-zinc-400">Organizations detached from automatic Stripe sync</p>
+              </div>
+              <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5">
+                <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Needs Review</p>
+                <p className="mt-3 text-3xl font-bold text-red-400">
+                  {organizations.filter((org) => org.subscription_status === "past_due" || org.subscription_status === "canceled").length}
+                </p>
+                <p className="mt-2 text-sm text-zinc-400">Past due or canceled organizations that may need follow-up</p>
+              </div>
+            </section>
+
+            <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+              <div className="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-8 backdrop-blur-xl">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-xl font-bold">Organizations Requiring Attention</h3>
+                    <p className="text-sm text-zinc-400 mt-1">
+                      Quick access to subscriptions that are inactive, manually overridden, or otherwise off the happy path.
+                    </p>
+                  </div>
+                  <Link href="/superadmin/organizations" className="text-sm text-primary hover:text-primary/80 transition">
+                    View all organizations
+                  </Link>
+                </div>
+
+                <div className="mt-6 space-y-3">
+                  {flaggedOrganizations.length > 0 ? (
+                    flaggedOrganizations.slice(0, 6).map((org) => (
+                      <div
+                        key={org.id}
+                        className="flex flex-col gap-4 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 md:flex-row md:items-center md:justify-between"
+                      >
+                        <div>
+                          <p className="font-semibold">{org.name}</p>
+                          <p className="text-xs text-zinc-500 mt-1">{org.id}</p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <span className="rounded-full border border-zinc-700 px-3 py-1 capitalize text-zinc-300">
+                            {org.plan}
+                          </span>
+                          <span className={`rounded-full px-3 py-1 capitalize border ${
+                            org.subscription_status === "active"
+                              ? "border-emerald-500/30 text-emerald-400 bg-emerald-500/10"
+                              : "border-amber-500/30 text-amber-300 bg-amber-500/10"
+                          }`}>
+                            {org.subscription_status}
+                          </span>
+                          {org.manual_override && (
+                            <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-3 py-1 text-sky-300">
+                              Manual override
+                            </span>
+                          )}
+                        </div>
+                        <Link
+                          href={`/superadmin/organizations/${org.id}`}
+                          className="rounded-xl bg-zinc-800 px-4 py-2 text-sm font-medium hover:bg-zinc-700 transition"
+                        >
+                          Open controls
+                        </Link>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-6 text-sm text-zinc-400">
+                      Everything looks healthy right now. No organization billing exceptions are currently surfaced.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-8 backdrop-blur-xl">
+                <h3 className="text-xl font-bold">Plan Distribution</h3>
+                <p className="text-sm text-zinc-400 mt-1">
+                  Snapshot of how subscriptions are distributed across the customer base.
+                </p>
+                <div className="mt-6 space-y-4">
+                  {planBreakdown.map((plan) => (
+                    <div key={plan.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <p className="font-semibold">{plan.name}</p>
+                          <p className="text-xs text-zinc-500">
+                            {plan.price ? `€${plan.price}/month baseline` : plan.priceLabel}
+                          </p>
+                        </div>
+                        <p className="text-2xl font-bold">{plan.count}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          </main>
+          <div className="w-full border-t border-white/10 p-4 text-center text-xs text-zinc-500">
+            <PublicLegalFooter />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex bg-black min-h-screen text-white">

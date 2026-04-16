@@ -46,7 +46,7 @@ export default function OrganizationDetailsPage() {
     try {
       const token = await auth.currentUser?.getIdToken();
       if (!token) return;
-      const data = await apiGet(`/admin/billing/organizations/${id}`, token);
+      const data = await apiGet(`/superadmin/billing/organizations/${id}`, token);
       setOrg(data);
       setPlan(data.plan);
       setStatus(data.subscription_status);
@@ -69,7 +69,7 @@ export default function OrganizationDetailsPage() {
     try {
       const token = await auth.currentUser?.getIdToken();
       if (!token) return;
-      await apiPost(`/admin/billing/organizations/${id}/subscription`, {
+      await apiPost(`/superadmin/billing/organizations/${id}/subscription`, {
         plan,
         subscription_status: status,
         limits: {
@@ -128,8 +128,8 @@ export default function OrganizationDetailsPage() {
                     onChange={(e) => setPlan(e.target.value)}
                     className="w-full bg-zinc-800/50 border border-zinc-800 rounded-xl px-4 py-3 outline-none focus:border-primary transition-colors text-lg"
                   >
-                    <option value="basic">Basic Plan (€49)</option>
-                    <option value="pro">Pro Plan (€149)</option>
+                    <option value="basic">Basic Plan (€100)</option>
+                    <option value="pro">Pro Plan (€250)</option>
                     <option value="enterprise">Enterprise Plan (€399)</option>
                     <option value="custom">Custom Plan (Overrides)</option>
                   </select>
@@ -178,7 +178,7 @@ export default function OrganizationDetailsPage() {
                 <button 
                   onClick={handleSave}
                   disabled={saving}
-                  className="bg-primary text-black px-12 py-4 rounded-xl font-bold hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
+                  className="bg-gray-800 text-white px-12 py-4 rounded-xl font-bold hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
                 >
                   {saving ? "SAVING..." : "SAVE CHANGES"}
                 </button>

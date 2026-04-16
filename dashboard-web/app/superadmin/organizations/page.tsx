@@ -30,7 +30,7 @@ export default function SuperadminOrganizationsPage() {
     try {
       const token = await auth.currentUser?.getIdToken();
       if (!token) return;
-      const data = await apiGet("/admin/billing/organizations", token);
+      const data = await apiGet("/superadmin/billing/organizations", token);
       setOrganizations(data);
     } catch (err) {
       setError("Failed to load organizations. Are you a superadmin?");

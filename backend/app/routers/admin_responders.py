@@ -26,7 +26,7 @@ def list_responders(user=Depends(require_role("admin", "team_leader")), backgrou
 from app.dependencies.subscription import check_responder_limit
 
 @router.post("/{uid}/add")
-def add_responder(uid: str, admin=Depends(require_role("admin")), org=Depends(check_responder_limit), background_tasks: BackgroundTasks = None):
+def add_responder(uid: str, admin=Depends(require_role("admin") | require_role("superadmin")), org=Depends(check_responder_limit), background_tasks: BackgroundTasks = None):
     service.add_responder(uid)
     
     async def _broadcast():
@@ -41,7 +41,7 @@ def add_responder(uid: str, admin=Depends(require_role("admin")), org=Depends(ch
     return {"status": "responder_added"}
 
 @router.post("/{uid}/remove")
-def remove_responder(uid: str, admin=Depends(require_role("admin")), background_tasks: BackgroundTasks = None):
+def remove_responder(uid: str, admin=Depends(require_role("admin") | require_role("superadmin")), background_tasks: BackgroundTasks = None):
     service.remove_responder(uid)
     
     async def _broadcast():
@@ -55,7 +55,7 @@ def remove_responder(uid: str, admin=Depends(require_role("admin")), background_
     return {"status": "responder_removed"}
 
 @router.post("/{uid}/active/{state}")
-def toggle_responder(uid: str, state: bool, admin=Depends(require_role("admin")), background_tasks: BackgroundTasks = None):
+def toggle_responder(uid: str, state: bool, admin=Depends(require_role("admin") | require_role("superadmin")), background_tasks: BackgroundTasks = None):
     service.toggle_active(uid, state)
     
     async def _broadcast():

@@ -33,9 +33,11 @@ import { auth, db } from "./lib/firebase";
 import { onAuthStateChanged, User, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 
+type AccessRole = "admin" | "superadmin";
+
 function AuthWrapper({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null | undefined>(undefined);
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null); // null = checking role
+  const [role, setRole] = useState<AccessRole | null | undefined>(undefined);
   const router = useRouter();
   const pathname = usePathname();
   const isPublicPath =
@@ -43,6 +45,7 @@ function AuthWrapper({ children }: { children: ReactNode }) {
     pathname === "/privacy" ||
     pathname === "/terms" ||
     pathname === "/cookies";
+  const isSuperadminPath = pathname.startsWith("/superadmin");
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (u: User | null) => {
@@ -51,38 +54,55 @@ function AuthWrapper({ children }: { children: ReactNode }) {
         // Fetch role from Firestore
         try {
           const userDoc = await getDoc(doc(db, "users", u.uid));
-          if (userDoc.exists() && userDoc.data().role === "admin") {
-            setIsAdmin(true);
+          const userRole = userDoc.data()?.role;
+          if (userDoc.exists() && (userRole === "admin" || userRole === "superadmin")) {
+            setRole(userRole);
           } else {
-            console.warn("User is not an admin");
-            setIsAdmin(false);
+            console.warn("User is not an admin or superadmin");
+            setRole(null);
           }
         } catch (error) {
           console.error("Error fetching user role:", error);
-          setIsAdmin(false);
+          setRole(null);
         }
       } else {
-        setIsAdmin(null);
+        setRole(undefined);
       }
     });
     return unsubscribe;
   }, []);
 
   useEffect(() => {
-    if (isPublicPath) {
+    if (user === undefined || role === undefined) {
       return;
     }
 
     if (user === null) {
-      console.log("No user, redirecting to /login");
-      router.push("/login");
-    } else if (user && isAdmin === false) {
-      // User is logged in but not an admin
-      console.log("User is not admin, logging out");
-      signOut(auth);
-      router.push("/login?error=not-authorized");
+      if (!isPublicPath) {
+        console.log("No user, redirecting to /login");
+        router.replace("/login");
+      }
+      return;
     }
-  }, [isPublicPath, user, isAdmin, router]);
+
+    if (role === null) {
+      console.log("User is not authorized, logging out");
+      signOut(auth);
+      router.replace("/login?error=not-authorized");
+      return;
+    }
+
+    if (role === "superadmin") {
+      if (pathname === "/" || pathname === "/login") {
+        router.replace("/superadmin/organizations");
+      }
+      return;
+    }
+
+    if (isSuperadminPath) {
+      router.replace("/");
+    }
+  }, [isPublicPath, isSuperadminPath, pathname, role, router, user]);
 
   // Allow login page to render without auth
   if (isPublicPath) {
@@ -90,7 +110,7 @@ function AuthWrapper({ children }: { children: ReactNode }) {
   }
 
   // Loading state (auth still checking or role still being fetched)
-  if (user === undefined || (user && isAdmin === null)) {
+  if (user === undefined || role === undefined) {
     return (
       <div className="h-screen w-full flex items-center justify-center bg-black text-white">
         <div className="flex flex-col items-center gap-4">
@@ -101,8 +121,8 @@ function AuthWrapper({ children }: { children: ReactNode }) {
     );
   }
 
-  // Final check: if not logged in or not admin, don't render children
-  if (!user || !isAdmin) {
+  // Final check: if not logged in or not authorized, don't render children
+  if (!user || !role) {
     return null;
   }
 

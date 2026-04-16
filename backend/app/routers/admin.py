@@ -19,7 +19,7 @@ logger = get_logger("app.admin")
 @router.post("/promote/{user_id}")
 def promote_user(
     user_id: str,
-    # admin=Depends(require_role("admin"))
+    admin=Depends(require_role("admin") | require_role("superadmin"))
 ):
     doc_ref = db.collection("users").document(user_id)
     doc = doc_ref.get()
@@ -97,7 +97,7 @@ def assign_leader(team_id: str, payload: dict):
 def set_responder_area(
     user_id: str,
     area: dict,
-    admin=Depends(require_role("admin"))
+    admin=Depends(require_role("admin") | require_role("superadmin"))
 ):
     doc_ref = db.collection("users").document(user_id)
     doc = doc_ref.get()
@@ -204,7 +204,7 @@ def delete_report(
 def admin_edit_report(
     report_id: str,
     data: UpdateReport,
-    admin=Depends(require_role("admin"))
+    admin=Depends(require_role("admin") | require_role("superadmin"))
 ):
     doc_ref = db.collection("reports").document(report_id)
     doc = doc_ref.get()
@@ -231,7 +231,7 @@ def admin_edit_report(
 @router.get("/logs")
 def get_logs(
     limit: int = Query(50, ge=1, le=200),
-    admin=Depends(require_role("admin"))
+    admin=Depends(require_role("admin") | require_role("superadmin"))
 ):
     """
     Fetch latest system logs (admin only)
@@ -265,7 +265,7 @@ def nearby_citizens(
     lat: float,
     lng: float,
     radius_km: float = 25,
-    # admin=Depends(require_role("admin"))
+    admin=Depends(require_role("admin") | require_role("superadmin"))
 ):
     users_ref = db.collection("users").where("role", "==", "citizen")
     users = users_ref.stream()
@@ -294,7 +294,7 @@ def nearby_citizens(
 @router.post("/invite-responder")
 def invite_responder(
     email: str, 
-    # admin=Depends(require_role("admin"))
+    admin=Depends(require_role("admin") | require_role("superadmin"))
 ):
     email = email.lower()
     token = secrets.token_urlsafe(32)
