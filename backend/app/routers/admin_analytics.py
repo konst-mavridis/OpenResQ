@@ -16,7 +16,7 @@ async def _broadcast_overview():
         logger.warning(f"Failed to broadcast analytics overview: {e}")
 
 @router.get("/overview")
-def analytics_overview(admin=Depends(require_role("admin") | require_role("superadmin")), background_tasks: BackgroundTasks = None):
+def analytics_overview(admin=Depends(require_role("admin", "superadmin")), background_tasks: BackgroundTasks = None):
     data = service.overview()
     # Broadcast analytics overview to all admins in background
     if background_tasks:
@@ -24,7 +24,7 @@ def analytics_overview(admin=Depends(require_role("admin") | require_role("super
     return data
 
 @router.get("/reports/last24h")
-def reports_last_24h(admin=Depends(require_role("admin") | require_role("superadmin"))):
+def reports_last_24h(admin=Depends(require_role("admin", "superadmin"))):
     return {
         "count": service.reports_last_24h()
     }
@@ -54,7 +54,7 @@ async def _broadcast_heatmap(hazard: str):
 @router.get("/heatmap/{hazard}")
 def heatmap(
     hazard: str,
-    admin = Depends(require_role("admin") | require_role("superadmin")),
+    admin = Depends(require_role("admin", "superadmin")),
     background_tasks: BackgroundTasks = None
 ):
     data = {
@@ -73,7 +73,7 @@ def heatmap(
     return data
 
 @router.get("/stats")
-def analytics_stats(admin=Depends(require_role("admin") | require_role("superadmin")), background_tasks: BackgroundTasks = None):
+def analytics_stats(admin=Depends(require_role("admin", "superadmin")), background_tasks: BackgroundTasks = None):
     """
     Get comprehensive analytics statistics.
     Combines overview, last 24h reports, and top hazards.
