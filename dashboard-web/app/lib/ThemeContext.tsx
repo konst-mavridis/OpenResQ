@@ -20,7 +20,6 @@ function initializeTheme(): Theme {
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(initializeTheme);
-  const [isMounted, setIsMounted] = useState(false);
 
   // Get system theme preference
   const getSystemTheme = useCallback((): "light" | "dark" => {
@@ -50,20 +49,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     [getSystemTheme]
   );
 
-  // Mark as mounted after initial render
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
   // Apply theme when it changes
   useEffect(() => {
-    if (!isMounted) return;
     applyTheme(theme);
-  }, [theme, isMounted, applyTheme]);
+  }, [theme, applyTheme]);
 
   // Listen for system theme changes
   useEffect(() => {
-    if (theme !== "system" || !isMounted) return;
+    if (theme !== "system") return;
 
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handleChange = () => {
@@ -72,16 +65,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     mediaQuery.addEventListener("change", handleChange);
     return () => mediaQuery.removeEventListener("change", handleChange);
-  }, [theme, isMounted, applyTheme]);
+  }, [theme, applyTheme]);
 
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);
     localStorage.setItem("theme", newTheme);
   };
-
-  if (!isMounted) {
-    return <>{children}</>;
-  }
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme, actualTheme }}>
